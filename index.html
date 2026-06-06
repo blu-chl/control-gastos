@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control de Gastos</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3250;
+      --accent: #6c63ff;
+      --accent2: #ff6584;
+      --accent3: #43e97b;
+      --text: #e2e8f0;
+      --muted: #7c85a8;
+      --income: #43e97b;
+      --expense: #ff6584;
+      --saving: #6c63ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
+    header h1 span { color: var(--text); }
+    .nav-tabs { display: flex; gap: .5rem; }
+    .tab-btn {
+      padding: .45rem 1.1rem; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer; font-size: .88rem; font-weight: 500; transition: all .2s;
+    }
+    .tab-btn.active, .tab-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ── Month selector ── */
+    .month-bar {
+      display: flex; align-items: center; gap: 1rem; padding: 1rem 2rem;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .month-bar button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+    .month-bar button:hover { border-color: var(--accent); }
+    #monthLabel { font-size: 1.1rem; font-weight: 600; min-width: 160px; text-align: center; }
+    .year-select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: .3rem .6rem; border-radius: 8px; font-size: .9rem; }
+
+    /* ── Layout ── */
+    main { padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Summary cards ── */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1.5rem;
+    }
+    .card-label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+    .card-value { font-size: 1.5rem; font-weight: 700; }
+    .card-value.income { color: var(--income); }
+    .card-value.expense { color: var(--expense); }
+    .card-value.saving { color: var(--saving); }
+    .card-value.balance { color: var(--text); }
+
+    /* ── Two-column grid ── */
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media(max-width:900px){ .grid2 { grid-template-columns: 1fr; } }
+
+    /* ── Panel ── */
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.3rem 1.5rem; }
+    .panel-title { font-size: .95rem; font-weight: 600; color: var(--muted); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: .06em; }
+
+    /* ── Chart container ── */
+    .chart-wrap { position: relative; height: 280px; }
+
+    /* ── Transaction list ── */
+    .tx-list { display: flex; flex-direction: column; gap: .5rem; max-height: 340px; overflow-y: auto; }
+    .tx-item {
+      display: flex; align-items: center; gap: .8rem;
+      background: var(--surface2); border-radius: 10px; padding: .7rem 1rem;
+    }
+    .tx-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .tx-info { flex: 1; }
+    .tx-name { font-size: .92rem; font-weight: 500; }
+    .tx-cat { font-size: .75rem; color: var(--muted); }
+    .tx-amount { font-weight: 700; font-size: .95rem; }
+    .tx-amount.ing { color: var(--income); }
+    .tx-amount.gas { color: var(--expense); }
+    .tx-del { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: .2rem .4rem; border-radius: 6px; }
+    .tx-del:hover { color: var(--expense); background: rgba(255,101,132,.1); }
+
+    /* ── Form ── */
+    .form-row { display: flex; gap: .8rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .form-row input, .form-row select {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      padding: .55rem .9rem; border-radius: 10px; font-size: .9rem; flex: 1; min-width: 120px;
+    }
+    .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent); }
+    .form-row input::placeholder { color: var(--muted); }
+    .btn-add {
+      background: var(--accent); color: #fff; border: none; border-radius: 10px;
+      padding: .55rem 1.4rem; font-size: .9rem; font-weight: 600; cursor: pointer; transition: opacity .2s;
+    }
+    .btn-add:hover { opacity: .85; }
+    .btn-secondary {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: .55rem 1.2rem; font-size: .9rem; cursor: pointer; transition: all .2s;
+    }
+    .btn-secondary:hover { border-color: var(--accent3); color: var(--accent3); }
+
+    /* ── Categories page ── */
+    .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: .8rem; }
+    .cat-chip {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: .7rem 1rem; display: flex; align-items: center; gap: .7rem;
+    }
+    .cat-icon { font-size: 1.3rem; }
+    .cat-name { flex: 1; font-size: .88rem; font-weight: 500; }
+    .cat-del { background: transparent; border: none; color: var(--muted); cursor: pointer; }
+    .cat-del:hover { color: var(--expense); }
+
+    /* ── Annual page ── */
+    .month-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 1rem; }
+    .month-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.2rem; cursor: pointer; transition: border-color .2s;
+    }
+    .month-card:hover { border-color: var(--accent); }
+    .month-card h3 { font-size: .95rem; font-weight: 600; margin-bottom: .6rem; }
+    .month-card .row { display: flex; justify-content: space-between; font-size: .82rem; margin-bottom: .2rem; }
+    .month-card .row span:first-child { color: var(--muted); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* ── Responsive header ── */
+    @media(max-width:600px){
+      header { flex-direction: column; gap: .7rem; }
+      .month-bar { flex-wrap: wrap; }
+      main { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💰 <span>Control de</span> Gastos</h1>
+  <nav class="nav-tabs">
+    <button class="tab-btn active" data-page="monthly">Mensual</button>
+    <button class="tab-btn" data-page="annual">Anual</button>
+    <button class="tab-btn" data-page="categories">Categorías</button>
+  </nav>
+</header>
+
+<!-- Month bar (only for monthly view) -->
+<div class="month-bar" id="monthBar">
+  <button id="prevMonth">&#8592;</button>
+  <span id="monthLabel"></span>
+  <button id="nextMonth">&#8594;</button>
+  <select class="year-select" id="yearSelect"></select>
+  <div style="margin-left:auto;display:flex;gap:.6rem;">
+    <button class="btn-secondary" onclick="exportMonthExcel()">⬇ Mes Excel</button>
+  </div>
+</div>
+
+<main>
+  <!-- ── MONTHLY PAGE ── -->
+  <div class="page active" id="page-monthly">
+    <div class="cards">
+      <div class="card"><div class="card-label">Ingresos</div><div class="card-value income" id="c-income">$0</div></div>
+      <div class="card"><div class="card-label">Gastos</div><div class="card-value expense" id="c-expense">$0</div></div>
+      <div class="card"><div class="card-label">Balance</div><div class="card-value balance" id="c-balance">$0</div></div>
+      <div class="card"><div class="card-label">Ahorro %</div><div class="card-value saving" id="c-saving">0%</div></div>
+    </div>
+
+    <!-- Add transaction -->
+    <div class="panel" style="margin-bottom:1.5rem;">
+      <div class="panel-title">Agregar movimiento</div>
+      <div class="form-row">
+        <select id="txType">
+          <option value="gasto">Gasto</option>
+          <option value="ingreso">Ingreso</option>
+        </select>
+        <input id="txName" type="text" placeholder="Descripción" />
+        <select id="txCat"></select>
+        <input id="txAmount" type="number" placeholder="Monto" min="0" />
+        <input id="txDate" type="date" />
+        <button class="btn-add" onclick="addTransaction()">+ Agregar</button>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <!-- Chart -->
+      <div class="panel">
+        <div class="panel-title">Distribución de gastos</div>
+        <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+      </div>
+      <!-- Bar chart -->
+      <div class="panel">
+        <div class="panel-title">Ingresos vs Gastos</div>
+        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+      </div>
+    </div>
+
+    <div style="margin-top:1.5rem;">
+      <div class="panel">
+        <div class="panel-title">Movimientos del mes</div>
+        <div class="tx-list" id="txList"></div>
+        <p id="txEmpty" style="color:var(--muted);font-size:.88rem;margin-top:.5rem;display:none;">Sin movimientos este mes.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ANNUAL PAGE ── -->
+  <div class="page" id="page-annual">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:.8rem;">
+      <div>
+        <select class="year-select" id="annualYear" style="font-size:1rem;padding:.4rem .8rem;"></select>
+      </div>
+      <button class="btn-secondary" onclick="exportAnnualExcel()">⬇ Resumen Anual Excel</button>
+    </div>
+    <div class="cards" id="annualCards"></div>
+    <div class="panel" style="margin-bottom:1.5rem;">
+      <div class="panel-title">Evolución mensual</div>
+      <div class="chart-wrap" style="height:320px;"><canvas id="annualBar"></canvas></div>
+    </div>
+    <div class="month-grid" id="monthGrid"></div>
+  </div>
+
+  <!-- ── CATEGORIES PAGE ── -->
+  <div class="page" id="page-categories">
+    <div class="panel" style="margin-bottom:1.2rem;">
+      <div class="panel-title">Nueva categoría</div>
+      <div class="form-row">
+        <input id="catEmoji" type="text" placeholder="Emoji (ej: 🍔)" style="max-width:80px;" maxlength="2" />
+        <input id="catName" type="text" placeholder="Nombre de categoría" />
+        <select id="catType">
+          <option value="gasto">Gasto</option>
+          <option value="ingreso">Ingreso</option>
+          <option value="ambos">Ambos</option>
+        </select>
+        <button class="btn-add" onclick="addCategory()">+ Agregar</button>
+      </div>
+    </div>
+    <div class="cat-grid" id="catGrid"></div>
+  </div>
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'cg_data_v1';
+let state = {
+  transactions: [],   // { id, type, name, cat, amount, date, year, month }
+  categories: [
+    { id:'c1', name:'Alimentación', emoji:'🍔', type:'gasto' },
+    { id:'c2', name:'Transporte',   emoji:'🚗', type:'gasto' },
+    { id:'c3', name:'Vivienda',     emoji:'🏠', type:'gasto' },
+    { id:'c4', name:'Salud',        emoji:'💊', type:'gasto' },
+    { id:'c5', name:'Entretención', emoji:'🎬', type:'gasto' },
+    { id:'c6', name:'Ropa',         emoji:'👗', type:'gasto' },
+    { id:'c7', name:'Educación',    emoji:'📚', type:'gasto' },
+    { id:'c8', name:'Sueldo',       emoji:'💼', type:'ingreso' },
+    { id:'c9', name:'Freelance',    emoji:'💻', type:'ingreso' },
+    { id:'c10', name:'Otros',       emoji:'📦', type:'ambos'  },
+  ]
+};
+let currentYear  = new Date().getFullYear();
+let currentMonth = new Date().getMonth(); // 0-indexed
+let activePage   = 'monthly';
+
+// Charts
+let pieChartInst = null, barChartInst = null, annualBarInst = null;
+
+// ── Persistence ────────────────────────────────────────────────────────
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function load() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) state = JSON.parse(raw);
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const COLORS  = ['#6c63ff','#ff6584','#43e97b','#f7b731','#45aaf2','#fd9644','#a29bfe','#fd79a8','#00b894','#fdcb6e','#74b9ff','#e17055'];
+
+function fmt(n) {
+  return '$' + Math.abs(n).toLocaleString('es-CL');
+}
+function uid() { return '_' + Math.random().toString(36).slice(2,9); }
+
+function monthTx(y, m) {
+  return state.transactions.filter(t => t.year === y && t.month === m);
+}
+
+function catById(id) { return state.categories.find(c => c.id === id); }
+
+// ── Categories ─────────────────────────────────────────────────────────
+function addCategory() {
+  const emoji = document.getElementById('catEmoji').value.trim() || '📦';
+  const name  = document.getElementById('catName').value.trim();
+  const type  = document.getElementById('catType').value;
+  if (!name) return;
+  state.categories.push({ id: uid(), name, emoji, type });
+  save(); renderCategories(); renderCatSelects();
+  document.getElementById('catName').value = '';
+  document.getElementById('catEmoji').value = '';
+}
+function deleteCategory(id) {
+  if (state.transactions.find(t => t.cat === id)) {
+    alert('No puedes eliminar una categoría con movimientos asociados.');
+    return;
+  }
+  state.categories = state.categories.filter(c => c.id !== id);
+  save(); renderCategories(); renderCatSelects();
+}
+function renderCategories() {
+  const grid = document.getElementById('catGrid');
+  grid.innerHTML = state.categories.map(c => `
+    <div class="cat-chip">
+      <span class="cat-icon">${c.emoji}</span>
+      <span class="cat-name">${c.name}<br><small style="color:var(--muted)">${c.type}</small></span>
+      <button class="cat-del" onclick="deleteCategory('${c.id}')">✕</button>
+    </div>`).join('');
+}
+function renderCatSelects() {
+  const type = document.getElementById('txType').value;
+  const cats = state.categories.filter(c => c.type === type || c.type === 'ambos');
+  const sel  = document.getElementById('txCat');
+  const prev = sel.value;
+  sel.innerHTML = cats.map(c => `<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+  if (cats.find(c => c.id === prev)) sel.value = prev;
+}
+
+// ── Transactions ───────────────────────────────────────────────────────
+function addTransaction() {
+  const name   = document.getElementById('txName').value.trim();
+  const cat    = document.getElementById('txCat').value;
+  const amount = parseFloat(document.getElementById('txAmount').value);
+  const type   = document.getElementById('txType').value;
+  const dateEl = document.getElementById('txDate').value;
+  if (!name || !amount || amount <= 0) { alert('Completa descripción y monto.'); return; }
+
+  let y = currentYear, m = currentMonth;
+  if (dateEl) { const d = new Date(dateEl + 'T00:00:00'); y = d.getFullYear(); m = d.getMonth(); }
+
+  state.transactions.push({ id: uid(), type, name, cat, amount, date: dateEl || '', year: y, month: m });
+  save(); renderMonthly();
+  document.getElementById('txName').value = '';
+  document.getElementById('txAmount').value = '';
+}
+function deleteTransaction(id) {
+  state.transactions = state.transactions.filter(t => t.id !== id);
+  save(); renderMonthly();
+}
+
+// ── Month navigation ───────────────────────────────────────────────────
+function updateMonthBar() {
+  document.getElementById('monthLabel').textContent = MONTHS[currentMonth] + ' ' + currentYear;
+  document.getElementById('yearSelect').value = currentYear;
+  document.getElementById('annualYear').value = currentYear;
+}
+document.getElementById('prevMonth').onclick = () => {
+  if (currentMonth === 0) { currentMonth = 11; currentYear--; }
+  else currentMonth--;
+  updateMonthBar(); renderMonthly();
+};
+document.getElementById('nextMonth').onclick = () => {
+  if (currentMonth === 11) { currentMonth = 0; currentYear++; }
+  else currentMonth++;
+  updateMonthBar(); renderMonthly();
+};
+
+function buildYearSelects() {
+  const y = new Date().getFullYear();
+  const opts = Array.from({length:6},(_,i)=>`<option>${y-2+i}</option>`).join('');
+  document.getElementById('yearSelect').innerHTML = opts;
+  document.getElementById('annualYear').innerHTML = opts;
+  document.getElementById('yearSelect').value = currentYear;
+  document.getElementById('annualYear').value = currentYear;
+}
+document.getElementById('yearSelect').onchange = e => { currentYear = +e.target.value; updateMonthBar(); renderMonthly(); };
+document.getElementById('annualYear').onchange  = e => { currentYear = +e.target.value; updateMonthBar(); renderAnnual(); };
+
+// ── Monthly Render ─────────────────────────────────────────────────────
+function renderMonthly() {
+  const txs      = monthTx(currentYear, currentMonth);
+  const income   = txs.filter(t => t.type === 'ingreso').reduce((a,t)=>a+t.amount,0);
+  const expense  = txs.filter(t => t.type === 'gasto').reduce((a,t)=>a+t.amount,0);
+  const balance  = income - expense;
+  const savingPct = income > 0 ? Math.round((balance/income)*100) : 0;
+
+  document.getElementById('c-income').textContent  = fmt(income);
+  document.getElementById('c-expense').textContent = fmt(expense);
+  document.getElementById('c-balance').textContent = (balance<0?'-':'') + fmt(balance);
+  document.getElementById('c-balance').style.color = balance >= 0 ? 'var(--income)' : 'var(--expense)';
+  document.getElementById('c-saving').textContent  = savingPct + '%';
+
+  // Pie chart by category (gastos only)
+  const catTotals = {};
+  txs.filter(t=>t.type==='gasto').forEach(t => {
+    catTotals[t.cat] = (catTotals[t.cat]||0) + t.amount;
+  });
+  const catLabels = Object.keys(catTotals).map(id => { const c = catById(id); return c ? c.emoji+' '+c.name : id; });
+  const catData   = Object.values(catTotals);
+  const catColors = COLORS.slice(0, catLabels.length);
+
+  if (pieChartInst) pieChartInst.destroy();
+  pieChartInst = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: catColors, borderWidth: 2, borderColor: 'var(--surface)' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position:'right', labels:{ color:'#e2e8f0', font:{size:12}, boxWidth:14 } } }
+    }
+  });
+
+  // Bar chart income vs expense per week
+  const weeks = ['Sem 1','Sem 2','Sem 3','Sem 4'];
+  const wIncome = [0,0,0,0]; const wExpense = [0,0,0,0];
+  txs.forEach(t => {
+    if (!t.date) { const w=0; if(t.type==='ingreso') wIncome[w]+=t.amount; else wExpense[w]+=t.amount; return; }
+    const day = new Date(t.date+'T00:00:00').getDate();
+    const w = Math.min(Math.floor((day-1)/7), 3);
+    if (t.type==='ingreso') wIncome[w]+=t.amount; else wExpense[w]+=t.amount;
+  });
+
+  if (barChartInst) barChartInst.destroy();
+  barChartInst = new Chart(document.getElementById('barChart'), {
+    type:'bar',
+    data:{ labels:weeks, datasets:[
+      { label:'Ingresos', data:wIncome,  backgroundColor:'rgba(67,233,123,.7)' },
+      { label:'Gastos',   data:wExpense, backgroundColor:'rgba(255,101,132,.7)' }
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#e2e8f0' } } },
+      scales:{
+        x:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } },
+        y:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } }
+      }
+    }
+  });
+
+  // Transaction list
+  const list  = document.getElementById('txList');
+  const empty = document.getElementById('txEmpty');
+  if (txs.length === 0) { list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+  const sorted = [...txs].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  list.innerHTML = sorted.map((t,i) => {
+    const c   = catById(t.cat);
+    const col = COLORS[state.categories.findIndex(x=>x.id===t.cat) % COLORS.length] || '#888';
+    return `<div class="tx-item">
+      <div class="tx-dot" style="background:${col}"></div>
+      <div class="tx-info">
+        <div class="tx-name">${t.name}</div>
+        <div class="tx-cat">${c ? c.emoji+' '+c.name : ''} · ${t.date || 'Sin fecha'}</div>
+      </div>
+      <span class="tx-amount ${t.type==='ingreso'?'ing':'gas'}">${t.type==='ingreso'?'+':'-'}${fmt(t.amount)}</span>
+      <button class="tx-del" onclick="deleteTransaction('${t.id}')">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+// ── Annual Render ──────────────────────────────────────────────────────
+function renderAnnual() {
+  const y = currentYear;
+  let totalIncome=0, totalExpense=0;
+  const mIncome=[], mExpense=[];
+
+  for (let m=0;m<12;m++){
+    const txs   = monthTx(y, m);
+    const inc   = txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+    const exp   = txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+    mIncome.push(inc); mExpense.push(exp);
+    totalIncome+=inc; totalExpense+=exp;
+  }
+  const totalBalance = totalIncome - totalExpense;
+  const totalSaving  = totalIncome>0 ? Math.round((totalBalance/totalIncome)*100) : 0;
+
+  document.getElementById('annualCards').innerHTML = `
+    <div class="card"><div class="card-label">Ingresos anuales</div><div class="card-value income">${fmt(totalIncome)}</div></div>
+    <div class="card"><div class="card-label">Gastos anuales</div><div class="card-value expense">${fmt(totalExpense)}</div></div>
+    <div class="card"><div class="card-label">Balance anual</div><div class="card-value ${totalBalance>=0?'income':'expense'}">${totalBalance<0?'-':''}${fmt(totalBalance)}</div></div>
+    <div class="card"><div class="card-label">Tasa de ahorro</div><div class="card-value saving">${totalSaving}%</div></div>
+  `;
+
+  // Annual bar
+  if (annualBarInst) annualBarInst.destroy();
+  annualBarInst = new Chart(document.getElementById('annualBar'), {
+    type:'bar',
+    data:{
+      labels: MONTHS,
+      datasets:[
+        { label:'Ingresos', data:mIncome,  backgroundColor:'rgba(67,233,123,.7)' },
+        { label:'Gastos',   data:mExpense, backgroundColor:'rgba(255,101,132,.7)' }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#e2e8f0' } } },
+      scales:{
+        x:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } },
+        y:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } }
+      }
+    }
+  });
+
+  // Month cards grid
+  const grid = document.getElementById('monthGrid');
+  grid.innerHTML = MONTHS.map((name,m) => {
+    const inc = mIncome[m], exp = mExpense[m], bal = inc-exp;
+    return `<div class="month-card" onclick="goToMonth(${y},${m})">
+      <h3>${name} ${y}</h3>
+      <div class="row"><span>Ingresos</span><span style="color:var(--income)">${fmt(inc)}</span></div>
+      <div class="row"><span>Gastos</span><span style="color:var(--expense)">${fmt(exp)}</span></div>
+      <div class="row"><span>Balance</span><span style="color:${bal>=0?'var(--income)':'var(--expense)'}">${bal<0?'-':''}${fmt(bal)}</span></div>
+    </div>`;
+  }).join('');
+}
+function goToMonth(y, m) {
+  currentYear=y; currentMonth=m;
+  updateMonthBar(); switchPage('monthly');
+}
+
+// ── Page switching ─────────────────────────────────────────────────────
+function switchPage(name) {
+  activePage = name;
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-'+name));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.page === name));
+  document.getElementById('monthBar').style.display = name === 'monthly' ? 'flex' : 'none';
+  if (name === 'monthly') renderMonthly();
+  if (name === 'annual')  renderAnnual();
+  if (name === 'categories') renderCategories();
+}
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.onclick = () => switchPage(btn.dataset.page);
+});
+
+// ── Excel export ───────────────────────────────────────────────────────
+function exportMonthExcel() {
+  const txs = monthTx(currentYear, currentMonth);
+  const rows = [['Fecha','Tipo','Descripción','Categoría','Monto']];
+  txs.forEach(t => {
+    const c = catById(t.cat);
+    rows.push([t.date || '-', t.type, t.name, c ? c.name : '-', t.type==='ingreso'?t.amount:-t.amount]);
+  });
+  // Summary at bottom
+  const income  = txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+  const expense = txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+  rows.push([]);
+  rows.push(['','','','Total Ingresos', income]);
+  rows.push(['','','','Total Gastos',   expense]);
+  rows.push(['','','','Balance',        income-expense]);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, MONTHS[currentMonth]);
+  XLSX.writeFile(wb, `gastos_${MONTHS[currentMonth]}_${currentYear}.xlsx`);
+}
+
+function exportAnnualExcel() {
+  const y = currentYear;
+  const wb = XLSX.utils.book_new();
+
+  // One sheet per month with data + summary sheet
+  const summaryRows = [['Mes','Ingresos','Gastos','Balance','Ahorro %']];
+  for (let m=0;m<12;m++){
+    const txs    = monthTx(y,m);
+    const inc    = txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+    const exp    = txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+    const bal    = inc-exp;
+    const savPct = inc>0?Math.round((bal/inc)*100):0;
+    summaryRows.push([MONTHS[m], inc, exp, bal, savPct+'%']);
+
+    if (txs.length > 0) {
+      const rows = [['Fecha','Tipo','Descripción','Categoría','Monto']];
+      txs.forEach(t => {
+        const c = catById(t.cat);
+        rows.push([t.date||'-', t.type, t.name, c?c.name:'-', t.type==='ingreso'?t.amount:-t.amount]);
+      });
+      rows.push([]); rows.push(['','','','Ingresos',inc]); rows.push(['','','','Gastos',exp]); rows.push(['','','','Balance',bal]);
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, MONTHS[m].slice(0,3));
+    }
+  }
+  // Summary totals
+  const allTxs = state.transactions.filter(t=>t.year===y);
+  const tInc = allTxs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+  const tExp = allTxs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+  summaryRows.push([]); summaryRows.push(['TOTAL',tInc,tExp,tInc-tExp,tInc>0?Math.round(((tInc-tExp)/tInc)*100)+'%':'0%']);
+  const ws0 = XLSX.utils.aoa_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(wb, ws0, 'Resumen');
+  XLSX.writeFile(wb, `resumen_gastos_${y}.xlsx`);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+function init() {
+  load();
+  buildYearSelects();
+  updateMonthBar();
+
+  // Default date to today
+  const today = new Date();
+  document.getElementById('txDate').value = today.toISOString().split('T')[0];
+
+  // Category selects
+  renderCatSelects();
+  document.getElementById('txType').onchange = renderCatSelects;
+
+  renderMonthly();
+}
+
+init();
+</script>
+</body>
+</html>
