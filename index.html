@@ -8,18 +8,18 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: #2e3250;
-      --accent: #6c63ff;
-      --accent2: #ff6584;
-      --accent3: #43e97b;
-      --text: #e2e8f0;
-      --muted: #7c85a8;
-      --income: #43e97b;
-      --expense: #ff6584;
-      --saving: #6c63ff;
+      --bg: #f0f4f0;
+      --surface: #ffffff;
+      --surface2: #f5f8f5;
+      --border: #c8dbc8;
+      --accent: #1d7a3c;
+      --accent-dark: #155c2c;
+      --accent-light: #e8f5ec;
+      --text: #1a2e1a;
+      --muted: #6b8f6b;
+      --income: #1a7a3a;
+      --expense: #c0392b;
+      --saving: #1d7a3c;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
@@ -27,10 +27,11 @@
     /* ── Header ── */
     header {
       background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 3px solid var(--accent);
       padding: 1rem 2rem;
       display: flex; align-items: center; justify-content: space-between;
       position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(29,122,60,.1);
     }
     header h1 { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
     header h1 span { color: var(--text); }
@@ -93,7 +94,7 @@
     .tx-amount.ing { color: var(--income); }
     .tx-amount.gas { color: var(--expense); }
     .tx-del { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: .2rem .4rem; border-radius: 6px; }
-    .tx-del:hover { color: var(--expense); background: rgba(255,101,132,.1); }
+    .tx-del:hover { color: var(--expense); background: rgba(192,57,43,.08); }
 
     /* ── Form ── */
     .form-row { display: flex; gap: .8rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -112,7 +113,7 @@
       background: var(--surface2); border: 1px solid var(--border); color: var(--text);
       border-radius: 10px; padding: .55rem 1.2rem; font-size: .9rem; cursor: pointer; transition: all .2s;
     }
-    .btn-secondary:hover { border-color: var(--accent3); color: var(--accent3); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Categories page ── */
     .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: .8rem; }
@@ -285,7 +286,7 @@ function load() {
 
 // ── Utils ──────────────────────────────────────────────────────────────
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const COLORS  = ['#6c63ff','#ff6584','#43e97b','#f7b731','#45aaf2','#fd9644','#a29bfe','#fd79a8','#00b894','#fdcb6e','#74b9ff','#e17055'];
+const COLORS  = ['#1d7a3c','#4caf72','#a8d5b5','#2e8b57','#6abf8a','#155c2c','#81c784','#388e3c','#b2dfdb','#43a047','#c8e6c9','#66bb6a'];
 
 function fmt(n) {
   return '$' + Math.abs(n).toLocaleString('es-CL');
@@ -414,7 +415,7 @@ function renderMonthly() {
     data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: catColors, borderWidth: 2, borderColor: 'var(--surface)' }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position:'right', labels:{ color:'#e2e8f0', font:{size:12}, boxWidth:14 } } }
+      plugins: { legend: { position:'right', labels:{ color:'#1a2e1a', font:{size:12}, boxWidth:14 } } }
     }
   });
 
@@ -432,15 +433,15 @@ function renderMonthly() {
   barChartInst = new Chart(document.getElementById('barChart'), {
     type:'bar',
     data:{ labels:weeks, datasets:[
-      { label:'Ingresos', data:wIncome,  backgroundColor:'rgba(67,233,123,.7)' },
-      { label:'Gastos',   data:wExpense, backgroundColor:'rgba(255,101,132,.7)' }
+      { label:'Ingresos', data:wIncome,  backgroundColor:'rgba(29,122,60,.75)' },
+      { label:'Gastos',   data:wExpense, backgroundColor:'rgba(192,57,43,.7)' }
     ]},
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#e2e8f0' } } },
+      plugins:{ legend:{ labels:{ color:'#1a2e1a' } } },
       scales:{
-        x:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } },
-        y:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } }
+        x:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } },
+        y:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } }
       }
     }
   });
@@ -496,16 +497,16 @@ function renderAnnual() {
     data:{
       labels: MONTHS,
       datasets:[
-        { label:'Ingresos', data:mIncome,  backgroundColor:'rgba(67,233,123,.7)' },
-        { label:'Gastos',   data:mExpense, backgroundColor:'rgba(255,101,132,.7)' }
+        { label:'Ingresos', data:mIncome,  backgroundColor:'rgba(29,122,60,.75)' },
+        { label:'Gastos',   data:mExpense, backgroundColor:'rgba(192,57,43,.7)' }
       ]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#e2e8f0' } } },
+      plugins:{ legend:{ labels:{ color:'#1a2e1a' } } },
       scales:{
-        x:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } },
-        y:{ ticks:{ color:'#7c85a8' }, grid:{ color:'rgba(255,255,255,.05)' } }
+        x:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } },
+        y:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } }
       }
     }
   });
