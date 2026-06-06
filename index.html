@@ -158,6 +158,37 @@
     }
     .lifebar-pct { font-size: .8rem; color: var(--muted); margin-top: .4rem; text-align: right; }
     .lifebar-hearts { font-size: 1.3rem; letter-spacing: .1em; margin-bottom: .6rem; }
+
+    /* ── Mode toggle ── */
+    .lb-toggle {
+      display: inline-flex; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 99px; padding: 3px; gap: 2px; margin-bottom: .9rem;
+    }
+    .lb-toggle button {
+      border: none; background: transparent; cursor: pointer;
+      padding: .28rem .85rem; border-radius: 99px; font-size: .78rem; font-weight: 600;
+      color: var(--muted); transition: all .18s;
+    }
+    .lb-toggle button.active { background: var(--accent); color: #fff; }
+
+    /* ── Big pct display (mode: bar) ── */
+    .lb-bigpct {
+      font-size: 3.8rem; font-weight: 900; line-height: 1; margin-bottom: .2rem;
+      font-variant-numeric: tabular-nums; transition: color .4s;
+    }
+    .lb-sublabel { font-size: .78rem; color: var(--muted); margin-bottom: 1rem; }
+    .lifebar-track-big {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; height: 28px; overflow: hidden; position: relative;
+    }
+    .lifebar-fill-big {
+      height: 100%; border-radius: 6px; position: relative;
+      transition: width .8s cubic-bezier(.4,0,.2,1), background .5s;
+      display: flex; align-items: center; justify-content: flex-end; padding-right: 8px;
+    }
+    .lifebar-fill-big span { font-size: .75rem; font-weight: 700; color: #fff; white-space: nowrap; }
+    .lb-scale { display: flex; justify-content: space-between; margin-top: .3rem; font-size: .7rem; color: var(--muted); }
+
     /* pulse when critical */
     @keyframes pulse-red { 0%,100%{ filter:drop-shadow(0 0 0px #c0392b); } 50%{ filter:drop-shadow(0 0 10px #c0392b88); } }
     .figure-critical { animation: pulse-red 1.2s infinite; }
@@ -298,14 +329,38 @@
 
       <!-- Info -->
       <div class="lifebar-info">
-        <div class="lifebar-title">❤️ Barra de vida</div>
-        <div class="lifebar-hearts" id="lifeHearts">♥♥♥♥♥</div>
-        <div class="lifebar-status" id="lifeStatus">Sin datos</div>
-        <div class="lifebar-msg" id="lifeMsg">Ingresa tus ingresos y gastos del mes para ver tu estado.</div>
-        <div class="lifebar-track">
-          <div class="lifebar-fill" id="lifebarFill" style="width:0%;background:#1d7a3c;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.2rem;">
+          <div class="lifebar-title" style="margin-bottom:0;">❤️ Barra de vida</div>
+          <div class="lb-toggle">
+            <button id="lbModeHearts" class="active" onclick="setLbMode('hearts')">♥ Corazones</button>
+            <button id="lbModeBar"    onclick="setLbMode('bar')">▬ Barra</button>
+          </div>
         </div>
-        <div class="lifebar-pct" id="lifebarPct">0% disponible</div>
+
+        <!-- Modo corazones -->
+        <div id="lbPanelHearts">
+          <div class="lifebar-hearts" id="lifeHearts">♥♥♥♥♥</div>
+          <div class="lifebar-status" id="lifeStatus">Sin datos</div>
+          <div class="lifebar-msg"   id="lifeMsg">Ingresa tus ingresos y gastos del mes para ver tu estado.</div>
+          <div class="lifebar-track">
+            <div class="lifebar-fill" id="lifebarFill" style="width:0%;background:#1d7a3c;"></div>
+          </div>
+          <div class="lifebar-pct" id="lifebarPct">0% disponible</div>
+        </div>
+
+        <!-- Modo barra -->
+        <div id="lbPanelBar" style="display:none;">
+          <div class="lb-bigpct" id="lbBigPct">0<span style="font-size:2rem;">%</span></div>
+          <div class="lb-sublabel" id="lbSubLabel">disponible del ingreso mensual</div>
+          <div class="lifebar-status" id="lifeStatusBar">Sin datos</div>
+          <div class="lifebar-msg"   id="lifeMsgBar" style="margin-top:.3rem;">Ingresa tus ingresos y gastos del mes para ver tu estado.</div>
+          <div class="lifebar-track-big" style="margin-top:1rem;">
+            <div class="lifebar-fill-big" id="lifebarFillBig" style="width:0%;background:#1d7a3c;">
+              <span id="lifebarFillLabel"></span>
+            </div>
+          </div>
+          <div class="lb-scale"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+        </div>
       </div>
     </div>
 
@@ -387,6 +442,7 @@ let state = {
 let currentYear  = new Date().getFullYear();
 let currentMonth = new Date().getMonth(); // 0-indexed
 let activePage   = 'monthly';
+let lbMode       = 'hearts'; // 'hearts' | 'bar'
 
 // Charts
 let pieChartInst = null, barChartInst = null, annualBarInst = null;
@@ -583,73 +639,88 @@ function renderMonthly() {
 }
 
 // ── Life Bar ───────────────────────────────────────────────────────────
+let _lastIncome = 0, _lastExpense = 0;
+
+function setLbMode(mode) {
+  lbMode = mode;
+  document.getElementById('lbModeHearts').classList.toggle('active', mode === 'hearts');
+  document.getElementById('lbModeBar').classList.toggle('active',    mode === 'bar');
+  document.getElementById('lbPanelHearts').style.display = mode === 'hearts' ? '' : 'none';
+  document.getElementById('lbPanelBar').style.display    = mode === 'bar'    ? '' : 'none';
+  renderLifebar(_lastIncome, _lastExpense);
+}
+
 function renderLifebar(income, expense) {
-  const pct   = income > 0 ? Math.max(0, Math.min(100, Math.round(((income - expense) / income) * 100))) : 0;
+  _lastIncome = income; _lastExpense = expense;
+  const pct    = income > 0 ? Math.max(0, Math.min(100, Math.round(((income - expense) / income) * 100))) : 0;
   const noData = income === 0 && expense === 0;
 
-  // Colores y mensajes según estado
+  // ── Estado según porcentaje ────────────────────────────────────────
   let color, status, msg, hearts, mouthPath;
   if (noData) {
     color = '#aab8aa'; status = '😶 Sin datos'; hearts = '♡♡♡♡♡';
     msg = 'Ingresa tus ingresos y gastos del mes para ver tu estado financiero.';
-    mouthPath = 'M53,38 Q60,38 67,38'; // boca recta
+    mouthPath = 'M53,38 Q60,38 67,38';
   } else if (pct >= 75) {
     color = '#1d7a3c'; status = '😄 ¡Excelente!'; hearts = '♥♥♥♥♥';
     msg = 'Estás ahorrando muy bien. Sigue así y tu billetera te va a agradecer.';
-    mouthPath = 'M52,37 Q60,45 68,37'; // sonrisa grande
+    mouthPath = 'M52,37 Q60,45 68,37';
   } else if (pct >= 50) {
     color = '#4caf50'; status = '🙂 Bien'; hearts = '♥♥♥♥♡';
     msg = 'Vas bien, pero aún hay margen para ahorrar un poco más este mes.';
-    mouthPath = 'M53,38 Q60,43 67,38'; // sonrisa suave
+    mouthPath = 'M53,38 Q60,43 67,38';
   } else if (pct >= 30) {
     color = '#f9a825'; status = '😐 Cuidado'; hearts = '♥♥♥♡♡';
     msg = 'Ya llevas más de la mitad del ingreso gastado. Ojo con los gastos hormiga.';
-    mouthPath = 'M53,39 Q60,39 67,39'; // boca recta
+    mouthPath = 'M53,39 Q60,39 67,39';
   } else if (pct >= 10) {
     color = '#e65100'; status = '😰 Peligro'; hearts = '♥♥♡♡♡';
     msg = '¡Cuidado! Casi no queda ingreso disponible. Frena los gastos ya.';
-    mouthPath = 'M53,41 Q60,37 67,41'; // fruncido
+    mouthPath = 'M53,41 Q60,37 67,41';
   } else if (pct > 0) {
     color = '#c0392b'; status = '😱 ¡Crítico!'; hearts = '♥♡♡♡♡';
     msg = 'Prácticamente en cero. Modo ahorro de emergencia activado.';
-    mouthPath = 'M52,42 Q60,36 68,42'; // muy fruncido
+    mouthPath = 'M52,42 Q60,36 68,42';
   } else {
     color = '#7b1010'; status = '💀 Game Over'; hearts = '♡♡♡♡♡';
     msg = 'Gastaste más de lo que ganaste. Tus gastos superan tus ingresos este mes.';
-    mouthPath = 'M52,43 Q60,36 68,43'; // fruncido extremo
+    mouthPath = 'M52,43 Q60,36 68,43';
   }
 
-  // Actualizar fill SVG (y = 220 - pct*2.2 para que llene de abajo hacia arriba)
+  // ── Figura SVG ────────────────────────────────────────────────────
   const fillY = 220 - (pct / 100) * 220;
   document.getElementById('fillRect').setAttribute('y', fillY);
   document.getElementById('fillBg').setAttribute('fill', color);
   document.querySelector('#wave').setAttribute('fill', color);
-
-  // Outline del SVG
   document.querySelectorAll('#lifebarSvg g[fill=none]').forEach(el => el.setAttribute('stroke', noData ? '#aab8aa' : color));
-
-  // Ojos: guiño si crítico
-  const eyeStyle = pct <= 10 && !noData ? 'display:none' : '';
   document.getElementById('eyeL').style.display = '';
   document.getElementById('eyeR').style.display = pct <= 10 && !noData ? 'none' : '';
-  // Boca
   document.getElementById('mouth').setAttribute('d', mouthPath);
-  document.getElementById('mouth').setAttribute('stroke', pct > 60 ? 'white' : (pct > 0 ? '#fff' : '#fff'));
-
-  // Pulso si crítico
   document.getElementById('lifebarSvg').className = (pct <= 10 && !noData) ? 'figure-critical' : '';
 
-  // Corazones
+  // ── Modo corazones ────────────────────────────────────────────────
   document.getElementById('lifeHearts').textContent = hearts;
   document.getElementById('lifeHearts').style.color = color;
   document.getElementById('lifeStatus').textContent = status;
   document.getElementById('lifeStatus').style.color = color;
-  document.getElementById('lifeMsg').textContent = msg;
-
-  // Barra horizontal
-  document.getElementById('lifebarFill').style.width   = pct + '%';
+  document.getElementById('lifeMsg').textContent    = msg;
+  document.getElementById('lifebarFill').style.width      = pct + '%';
   document.getElementById('lifebarFill').style.background = color;
   document.getElementById('lifebarPct').textContent = noData ? '—' : pct + '% disponible del ingreso';
+
+  // ── Modo barra ────────────────────────────────────────────────────
+  const bigEl = document.getElementById('lbBigPct');
+  bigEl.style.color = color;
+  bigEl.innerHTML = noData ? `—` : `${pct}<span style="font-size:2rem;">%</span>`;
+  document.getElementById('lbSubLabel').textContent    = noData ? 'sin datos este mes' : 'disponible del ingreso mensual';
+  document.getElementById('lifeStatusBar').textContent = status;
+  document.getElementById('lifeStatusBar').style.color = color;
+  document.getElementById('lifeMsgBar').textContent    = msg;
+  const fillBig = document.getElementById('lifebarFillBig');
+  fillBig.style.width      = pct + '%';
+  fillBig.style.background = color;
+  // Mostrar etiqueta interna solo si hay espacio
+  document.getElementById('lifebarFillLabel').textContent = pct >= 15 ? pct + '%' : '';
 }
 
 // ── Annual Render ──────────────────────────────────────────────────────
