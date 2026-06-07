@@ -192,7 +192,7 @@
       padding: 1.5rem 2rem; margin-bottom: 1.5rem;
       display: flex; align-items: center; gap: 2.5rem; flex-wrap: wrap;
     }
-    .lifebar-figure svg { width: 120px; height: 220px; display: block; }
+    .lifebar-figure svg { width: 110px; height: 220px; display: block; }
     .lifebar-info { flex: 1; min-width: 200px; }
     .lifebar-title { font-size: 1rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: .5rem; }
     .lifebar-status { font-size: 1.5rem; font-weight: 800; margin-bottom: .3rem; }
@@ -316,50 +316,134 @@
     <!-- BARRA DE VIDA -->
     <div class="lifebar-panel">
       <div class="lifebar-figure">
-        <svg id="lifebarSvg" viewBox="0 0 120 220" xmlns="http://www.w3.org/2000/svg">
+        <svg id="lifebarSvg" viewBox="0 0 120 230" xmlns="http://www.w3.org/2000/svg">
           <defs>
+            <!-- Silueta humana realista como path único -->
             <clipPath id="personClip">
-              <circle cx="60" cy="30" r="22"/>
-              <rect x="34" y="52" width="52" height="70" rx="14"/>
-              <rect x="10" y="54" width="26" height="14" rx="7"/>
-              <rect x="10" y="68" width="14" height="36" rx="7"/>
-              <rect x="84" y="54" width="26" height="14" rx="7"/>
-              <rect x="96" y="68" width="14" height="36" rx="7"/>
-              <rect x="36" y="118" width="22" height="60" rx="11"/>
-              <rect x="30" y="170" width="28" height="16" rx="8"/>
-              <rect x="62" y="118" width="22" height="60" rx="11"/>
-              <rect x="62" y="170" width="28" height="16" rx="8"/>
+              <path d="
+                M60,4
+                C49,4 41,12 41,23
+                C41,34 49,42 60,42
+                C71,42 79,34 79,23
+                C79,12 71,4 60,4 Z
+
+                M60,44
+                C55,44 51,46 48,49
+                C45,51 43,54 43,57
+                L38,57
+                C34,57 31,60 31,64
+                L27,95
+                C27,98 29,101 32,101
+                L36,101
+                L36,57
+                L37,57
+                L40,105
+                L42,120
+
+                L36,165
+                C35,169 35,173 36,177
+                L36,205
+                C36,209 39,212 43,212
+                L47,212
+                C51,212 54,209 54,205
+                L54,175
+                L57,155
+
+                L63,155
+                L66,175
+                L66,205
+                C66,209 69,212 73,212
+                L77,212
+                C81,212 84,209 84,205
+                L84,177
+                C85,173 85,169 84,165
+                L78,120
+                L80,105
+                L83,57
+                L84,57
+                L84,101
+                L88,101
+                C91,101 93,98 93,95
+                L89,64
+                C89,60 86,57 82,57
+                L77,57
+                C77,54 75,51 72,49
+                C69,46 65,44 60,44 Z
+              "/>
             </clipPath>
             <clipPath id="fillClip">
-              <rect id="fillRect" x="0" y="220" width="120" height="220"/>
+              <rect id="fillRect" x="0" y="230" width="120" height="230"/>
             </clipPath>
           </defs>
-          <g clip-path="url(#personClip)" opacity=".18"><rect x="0" y="0" width="120" height="220" fill="#1a2e1a"/></g>
+          <!-- Sombra / relleno base oscuro -->
+          <g clip-path="url(#personClip)" opacity=".15"><rect x="0" y="0" width="120" height="230" fill="#1a2e1a"/></g>
+          <!-- Líquido animado -->
           <g clip-path="url(#personClip)">
             <g clip-path="url(#fillClip)">
-              <rect id="fillBg" x="0" y="0" width="120" height="220" fill="#1d7a3c"/>
-              <path id="wave" d="M-40,0 Q-10,-8 20,0 Q50,8 80,0 Q110,-8 140,0 L140,220 L-40,220 Z" fill="#1d7a3c" opacity=".6">
+              <rect id="fillBg" x="0" y="0" width="120" height="230" fill="#1d7a3c"/>
+              <path id="wave" d="M-40,0 Q-10,-10 20,0 Q50,10 80,0 Q110,-10 140,0 L140,230 L-40,230 Z" fill="#1d7a3c" opacity=".6">
                 <animateTransform attributeName="transform" type="translate" from="0,0" to="80,0" dur="2.5s" repeatCount="indefinite"/>
               </path>
             </g>
           </g>
-          <g fill="none" stroke="#1d7a3c" stroke-width="2.5" opacity=".5">
-            <circle cx="60" cy="30" r="22"/>
-            <rect x="34" y="52" width="52" height="70" rx="14"/>
-            <rect x="10" y="54" width="26" height="14" rx="7"/>
-            <rect x="10" y="68" width="14" height="36" rx="7"/>
-            <rect x="84" y="54" width="26" height="14" rx="7"/>
-            <rect x="96" y="68" width="14" height="36" rx="7"/>
-            <rect x="36" y="118" width="22" height="60" rx="11"/>
-            <rect x="30" y="170" width="28" height="16" rx="8"/>
-            <rect x="62" y="118" width="22" height="60" rx="11"/>
-            <rect x="62" y="170" width="28" height="16" rx="8"/>
-          </g>
-          <circle cx="52" cy="28" r="3.5" fill="white" id="eyeL"/>
-          <circle cx="68" cy="28" r="3.5" fill="white" id="eyeR"/>
-          <circle cx="53" cy="29" r="1.5" fill="#1a2e1a"/>
-          <circle cx="69" cy="29" r="1.5" fill="#1a2e1a"/>
-          <path id="mouth" d="M53,38 Q60,44 67,38" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <!-- Contorno silueta -->
+          <path id="personOutline" fill="none" stroke="#1d7a3c" stroke-width="1.8" opacity=".55" d="
+            M60,4
+            C49,4 41,12 41,23
+            C41,34 49,42 60,42
+            C71,42 79,34 79,23
+            C79,12 71,4 60,4 Z
+
+            M60,44
+            C55,44 51,46 48,49
+            C45,51 43,54 43,57
+            L38,57
+            C34,57 31,60 31,64
+            L27,95
+            C27,98 29,101 32,101
+            L36,101
+            L36,57
+            L37,57
+            L40,105
+            L42,120
+
+            L36,165
+            C35,169 35,173 36,177
+            L36,205
+            C36,209 39,212 43,212
+            L47,212
+            C51,212 54,209 54,205
+            L54,175
+            L57,155
+
+            L63,155
+            L66,175
+            L66,205
+            C66,209 69,212 73,212
+            L77,212
+            C81,212 84,209 84,205
+            L84,177
+            C85,173 85,169 84,165
+            L78,120
+            L80,105
+            L83,57
+            L84,57
+            L84,101
+            L88,101
+            C91,101 93,98 93,95
+            L89,64
+            C89,60 86,57 82,57
+            L77,57
+            C77,54 75,51 72,49
+            C69,46 65,44 60,44 Z
+          "/>
+          <!-- Ojos -->
+          <circle cx="53" cy="21" r="3" fill="white" id="eyeL"/>
+          <circle cx="67" cy="21" r="3" fill="white" id="eyeR"/>
+          <circle cx="54" cy="22" r="1.3" fill="#1a2e1a"/>
+          <circle cx="68" cy="22" r="1.3" fill="#1a2e1a"/>
+          <!-- Boca -->
+          <path id="mouth" d="M54,31 Q60,36 66,31" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="lifebar-info">
@@ -767,7 +851,7 @@ function renderLifebar(income, expense) {
   else if(pct>0)  { color='#c0392b'; status='😱 ¡Crítico!';   hearts='♥♡♡♡♡'; msg='Prácticamente en cero. Modo emergencia activado.'; mouth='M52,42 Q60,36 68,42'; }
   else            { color='#7b1010'; status='💀 Game Over';    hearts='♡♡♡♡♡'; msg='Gastaste más de lo que ganaste este mes.'; mouth='M52,43 Q60,36 68,43'; }
 
-  const fillY = 220-(pct/100)*220;
+  const fillY = 230-(pct/100)*230;
   document.getElementById('fillRect').setAttribute('y', fillY);
   document.getElementById('fillBg').setAttribute('fill', color);
   document.querySelector('#wave').setAttribute('fill', color);
