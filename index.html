@@ -437,13 +437,17 @@
             C77,54 75,51 72,49
             C69,46 65,44 60,44 Z
           "/>
-          <!-- Ojos -->
-          <circle cx="53" cy="21" r="3" fill="white" id="eyeL"/>
-          <circle cx="67" cy="21" r="3" fill="white" id="eyeR"/>
-          <circle cx="54" cy="22" r="1.3" fill="#1a2e1a"/>
-          <circle cx="68" cy="22" r="1.3" fill="#1a2e1a"/>
+          <!-- Cejas -->
+          <path id="browL" d="M49,15 Q53,13 57,15" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path id="browR" d="M63,15 Q67,13 71,15" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <!-- Ojos (blancos) -->
+          <ellipse id="eyeL" cx="53" cy="21" rx="3.2" ry="3" fill="white"/>
+          <ellipse id="eyeR" cx="67" cy="21" rx="3.2" ry="3" fill="white"/>
+          <!-- Pupilas -->
+          <circle id="pupilL" cx="53.5" cy="21.5" r="1.4" fill="#1a2e1a"/>
+          <circle id="pupilR" cx="67.5" cy="21.5" r="1.4" fill="#1a2e1a"/>
           <!-- Boca -->
-          <path id="mouth" d="M54,31 Q60,36 66,31" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path id="mouth" d="M54,31 Q60,35 66,31" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="lifebar-info">
@@ -842,22 +846,73 @@ function renderLifebar(income, expense) {
   _lastIncome=income; _lastExpense=expense;
   const pct    = income>0 ? Math.max(0,Math.min(100,Math.round(((income-expense)/income)*100))) : 0;
   const noData = income===0 && expense===0;
-  let color,status,msg,hearts,mouth;
-  if (noData)     { color='#aab8aa'; status='😶 Sin datos';    hearts='♡♡♡♡♡'; msg='Ingresa tus ingresos y gastos del mes para ver tu estado.'; mouth='M53,38 Q60,38 67,38'; }
-  else if(pct>=75){ color='#1d7a3c'; status='😄 ¡Excelente!'; hearts='♥♥♥♥♥'; msg='Estás ahorrando muy bien. ¡Tu billetera te lo agradece!'; mouth='M52,37 Q60,45 68,37'; }
-  else if(pct>=50){ color='#4caf50'; status='🙂 Bien';         hearts='♥♥♥♥♡'; msg='Vas bien, pero hay margen para ahorrar un poco más.'; mouth='M53,38 Q60,43 67,38'; }
-  else if(pct>=30){ color='#f9a825'; status='😐 Cuidado';      hearts='♥♥♥♡♡'; msg='Más de la mitad del ingreso gastado. Ojo con los gastos hormiga.'; mouth='M53,39 Q60,39 67,39'; }
-  else if(pct>=10){ color='#e65100'; status='😰 Peligro';      hearts='♥♥♡♡♡'; msg='¡Casi no queda! Frena los gastos ya.'; mouth='M53,41 Q60,37 67,41'; }
-  else if(pct>0)  { color='#c0392b'; status='😱 ¡Crítico!';   hearts='♥♡♡♡♡'; msg='Prácticamente en cero. Modo emergencia activado.'; mouth='M52,42 Q60,36 68,42'; }
-  else            { color='#7b1010'; status='💀 Game Over';    hearts='♡♡♡♡♡'; msg='Gastaste más de lo que ganaste este mes.'; mouth='M52,43 Q60,36 68,43'; }
+  let color,status,msg,hearts,mouth,browL,browR,eyeLd,eyeRd,pupilLx,pupilRx,pupilLy,pupilRy;
+  // Coordenadas de referencia: ojos en cy≈21, boca en y≈31-34
+  if (noData) {
+    color='#aab8aa'; status='😶 Sin datos'; hearts='♡♡♡♡♡';
+    msg='Ingresa tus ingresos y gastos del mes para ver tu estado.';
+    mouth='M54,32 Q60,32 66,32';                      // línea plana
+    browL='M49,15 Q53,13 57,15'; browR='M63,15 Q67,13 71,15'; // cejas normales
+    eyeLd='M50,21 a3.2,3 0 1,1 6.4,0 a3.2,3 0 1,1 -6.4,0'; eyeRd='M63.8,21 a3.2,3 0 1,1 6.4,0 a3.2,3 0 1,1 -6.4,0';
+    pupilLx=53.5; pupilLy=21.5; pupilRx=67.5; pupilRy=21.5;
+  } else if(pct>=75) {
+    color='#1d7a3c'; status='😄 ¡Excelente!'; hearts='♥♥♥♥♥';
+    msg='Estás ahorrando muy bien. ¡Tu billetera te lo agradece!';
+    mouth='M53,31 Q60,38 67,31';                      // sonrisa grande
+    browL='M49,14 Q53,12 57,14'; browR='M63,14 Q67,12 71,14'; // cejas arriba (feliz)
+    eyeLd='M50,21 a3.2,2.5 0 1,1 6.4,0 a3.2,2.5 0 1,1 -6.4,0'; eyeRd='M63.8,21 a3.2,2.5 0 1,1 6.4,0 a3.2,2.5 0 1,1 -6.4,0';
+    pupilLx=53.5; pupilLy=21; pupilRx=67.5; pupilRy=21;
+  } else if(pct>=50) {
+    color='#4caf50'; status='🙂 Bien'; hearts='♥♥♥♥♡';
+    msg='Vas bien, pero hay margen para ahorrar un poco más.';
+    mouth='M54,31 Q60,35 66,31';                      // sonrisa suave
+    browL='M49,15 Q53,13 57,15'; browR='M63,15 Q67,13 71,15';
+    eyeLd='M50,21 a3.2,3 0 1,1 6.4,0 a3.2,3 0 1,1 -6.4,0'; eyeRd='M63.8,21 a3.2,3 0 1,1 6.4,0 a3.2,3 0 1,1 -6.4,0';
+    pupilLx=53.5; pupilLy=21.5; pupilRx=67.5; pupilRy=21.5;
+  } else if(pct>=30) {
+    color='#f9a825'; status='😐 Cuidado'; hearts='♥♥♥♡♡';
+    msg='Más de la mitad del ingreso gastado. Ojo con los gastos hormiga.';
+    mouth='M54,32 Q60,31 66,32';                      // boca casi plana
+    browL='M49,16 Q53,15 57,14'; browR='M63,14 Q67,15 71,16'; // leve ceño
+    eyeLd='M50,21 a3.2,3 0 1,1 6.4,0 a3.2,3 0 1,1 -6.4,0'; eyeRd='M63.8,21 a3.2,3 0 1,1 6.4,0 a3.2,3 0 1,1 -6.4,0';
+    pupilLx=53.5; pupilLy=22; pupilRx=67.5; pupilRy=22;
+  } else if(pct>=10) {
+    color='#e65100'; status='😰 Peligro'; hearts='♥♥♡♡♡';
+    msg='¡Casi no queda! Frena los gastos ya.';
+    mouth='M53,33 Q60,30 67,33';                      // fruncida (triste)
+    browL='M49,17 Q53,14 57,16'; browR='M63,16 Q67,14 71,17'; // ceño preocupado
+    eyeLd='M50,22 a3.2,2.5 0 1,1 6.4,0 a3.2,2.5 0 1,1 -6.4,0'; eyeRd='M63.8,22 a3.2,2.5 0 1,1 6.4,0 a3.2,2.5 0 1,1 -6.4,0';
+    pupilLx=53.5; pupilLy=22.5; pupilRx=67.5; pupilRy=22.5;
+  } else if(pct>0) {
+    color='#c0392b'; status='😱 ¡Crítico!'; hearts='♥♡♡♡♡';
+    msg='Prácticamente en cero. Modo emergencia activado.';
+    mouth='M53,33 Q60,28 67,33';                      // muy fruncida
+    browL='M49,18 Q53,14 57,17'; browR='M63,17 Q67,14 71,18'; // ceño muy marcado
+    eyeLd='M50,22 a3.2,2.2 0 1,1 6.4,0 a3.2,2.2 0 1,1 -6.4,0'; eyeRd='M63.8,22 a3.2,2.2 0 1,1 6.4,0 a3.2,2.2 0 1,1 -6.4,0';
+    pupilLx=53; pupilLy=23; pupilRx=67; pupilRy=23;
+  } else {
+    color='#7b1010'; status='💀 Game Over'; hearts='♡♡♡♡♡';
+    msg='Gastaste más de lo que ganaste este mes.';
+    mouth='M52,34 Q60,27 68,34';                      // llorando (super triste)
+    browL='M49,18 Q53,15 57,17'; browR='M63,17 Q67,15 71,18';
+    eyeLd='M50,22 a3.2,2 0 1,1 6.4,0 a3.2,2 0 1,1 -6.4,0'; eyeRd='M63.8,22 a3.2,2 0 1,1 6.4,0 a3.2,2 0 1,1 -6.4,0';
+    pupilLx=53; pupilLy=23.5; pupilRx=67; pupilRy=23.5;
+  }
 
   const fillY = 230-(pct/100)*230;
   document.getElementById('fillRect').setAttribute('y', fillY);
   document.getElementById('fillBg').setAttribute('fill', color);
   document.querySelector('#wave').setAttribute('fill', color);
-  document.querySelectorAll('#lifebarSvg g[fill=none]').forEach(el => el.setAttribute('stroke', noData?'#aab8aa':color));
-  document.getElementById('eyeR').style.display = pct<=10&&!noData ? 'none' : '';
+  document.getElementById('personOutline').setAttribute('stroke', noData?'#aab8aa':color);
+  document.getElementById('browL').setAttribute('d', browL);
+  document.getElementById('browR').setAttribute('d', browR);
+  document.getElementById('browL').setAttribute('stroke', 'white');
+  document.getElementById('browR').setAttribute('stroke', 'white');
   document.getElementById('mouth').setAttribute('d', mouth);
+  document.getElementById('pupilL').setAttribute('cx', pupilLx);
+  document.getElementById('pupilL').setAttribute('cy', pupilLy);
+  document.getElementById('pupilR').setAttribute('cx', pupilRx);
+  document.getElementById('pupilR').setAttribute('cy', pupilRy);
   document.getElementById('lifebarSvg').className = (pct<=10&&!noData) ? 'figure-critical' : '';
 
   // Corazones
