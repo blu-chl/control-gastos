@@ -523,21 +523,62 @@ function catById(id)   { return state.categories.find(c => c.id === id); }
 
 // ══ LOAD FROM SUPABASE ═══════════════════════════════════════════════════
 async function loadData() {
-  const uid = currentUser.id;
-  const [{ data: cats }, { data: txs }] = await Promise.all([
-    sb.from('cg_categories').select('*').eq('user_id', uid).order('created_at'),
-    sb.from('cg_transactions').select('*').eq('user_id', uid).order('created_at'),
+  const userId = currentUser.id;
+
+  // Timeout de 10s para evitar cuelgues infinitos
+  const withTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
   ]);
 
-  // Primera vez: insertar categorías por defecto
-  if (cats && cats.length === 0) {
-    const defaults = DEFAULT_CATS.map(c => ({ ...c, id: uid(), user_id: uid }));
-    await sb.from('cg_categories').insert(defaults);
-    state.categories = defaults;
-  } else {
-    state.categories = cats || [];
+  try {
+    const [catsRes, txsRes] = await withTimeout(Promise.all([
+      sb.from('cg_categories').select('*').eq('user_id', userId).order('created_at'),
+      sb.from('cg_transactions').select('*').eq('user_id', userId).order('created_at'),
+    ]), 10000);
+
+    const cats = catsRes.data;
+    const txs  = txsRes.data;
+
+    // Mostrar error si las tablas no existen aún
+    if (catsRes.error || txsRes.error) {
+      const err = catsRes.error || txsRes.error;
+      // Si es error de tabla no encontrada, mostrar instrucciones
+      if (err.code === '42P01' || err.message?.includes('does not exist')) {
+        showDbError();
+        return;
+      }
+      console.error('Supabase error:', err);
+    }
+
+    // Primera vez: insertar categorías por defecto
+    if (Array.isArray(cats) && cats.length === 0) {
+      const defaults = DEFAULT_CATS.map(c => ({ ...c, id: uid(), user_id: userId }));
+      const { error: insertErr } = await sb.from('cg_categories').insert(defaults);
+      if (!insertErr) state.categories = defaults;
+      else { showDbError(); return; }
+    } else {
+      state.categories = cats || [];
+    }
+    state.transactions = txs || [];
+
+  } catch (e) {
+    console.error('loadData error:', e);
+    if (e.message === 'timeout') {
+      showDbError('La conexión tardó demasiado. Revisa tu internet e intenta de nuevo.');
+    } else {
+      showDbError();
+    }
   }
-  state.transactions = txs || [];
+}
+
+function showDbError(msg) {
+  document.getElementById('appLoader').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+  const el = document.getElementById('loginMsg');
+  el.textContent = msg || '⚠️ Las tablas de la base de datos no existen aún. Ejecuta el SQL en el dashboard de Supabase primero.';
+  el.className = 'login-msg error';
 }
 
 // ══ CATEGORIES ════════════════════════════════════════════════════════════
@@ -836,34 +877,48 @@ function exportAnnualExcel() {
 async function startApp(user) {
   currentUser = user;
 
-  // Header usuario
   const email = user.email || '';
   document.getElementById('userEmail').textContent  = email;
   document.getElementById('userAvatar').textContent = email[0].toUpperCase();
 
-  // Mostrar loader, cargar datos
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('appLoader').style.display    = 'flex';
-  await loadData();
-  document.getElementById('appLoader').style.display = 'none';
-  document.getElementById('app').style.display       = 'block';
 
-  buildYearSelects();
-  updateMonthBar();
-  document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
-  renderCatSelects();
-  document.getElementById('txType').onchange = renderCatSelects;
-  renderMonthly();
-  syncState('ok');
+  try {
+    await loadData();
+
+    // Si loadData encontró error y volvió al login, no seguir
+    if (document.getElementById('loginOverlay').style.display === 'flex') return;
+
+    document.getElementById('appLoader').style.display = 'none';
+    document.getElementById('app').style.display       = 'block';
+
+    buildYearSelects();
+    updateMonthBar();
+    document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+    renderCatSelects();
+    document.getElementById('txType').onchange = renderCatSelects;
+    renderMonthly();
+    syncState('ok');
+  } catch (e) {
+    console.error('startApp error:', e);
+    document.getElementById('appLoader').style.display = 'none';
+    showDbError('Error inesperado al cargar la app. Intenta recargar la página.');
+  }
 }
 
 // Escuchar cambios de sesión
+let _appStarted = false;
 sb.auth.onAuthStateChange(async (event, session) => {
+  // Evitar doble llamada en algunos navegadores
   if (session?.user) {
+    if (_appStarted && event === 'INITIAL_SESSION') return;
+    _appStarted = true;
     await startApp(session.user);
   } else {
-    document.getElementById('app').style.display = 'none';
-    document.getElementById('appLoader').style.display = 'none';
+    _appStarted = false;
+    document.getElementById('app').style.display        = 'none';
+    document.getElementById('appLoader').style.display  = 'none';
     document.getElementById('loginOverlay').style.display = 'flex';
   }
 });
