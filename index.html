@@ -6,6 +6,7 @@
   <title>Control de Gastos</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
     :root {
       --bg: #f0f4f0;
@@ -24,79 +25,132 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
 
-    /* ── Header ── */
+    /* ══ LOGIN OVERLAY ══════════════════════════════════════════════════ */
+    #loginOverlay {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .login-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 2.5rem 2rem; width: 100%; max-width: 380px;
+      box-shadow: 0 8px 40px rgba(29,122,60,.12);
+    }
+    .login-box h2 { font-size: 1.5rem; color: var(--accent); margin-bottom: .3rem; }
+    .login-box p  { font-size: .88rem; color: var(--muted); margin-bottom: 1.8rem; }
+    .login-field { margin-bottom: 1rem; }
+    .login-field label { display: block; font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: .35rem; }
+    .login-field input {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: .65rem .9rem; border-radius: 10px; font-size: .95rem;
+    }
+    .login-field input:focus { outline: none; border-color: var(--accent); }
+    .login-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+    .login-tab {
+      flex: 1; padding: .4rem; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer; font-size: .85rem; font-weight: 600; transition: all .18s;
+    }
+    .login-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-login {
+      width: 100%; background: var(--accent); color: #fff; border: none;
+      border-radius: 10px; padding: .75rem; font-size: 1rem; font-weight: 700;
+      cursor: pointer; transition: opacity .2s; margin-top: .5rem;
+    }
+    .btn-login:hover { opacity: .87; }
+    .login-msg { font-size: .82rem; margin-top: .8rem; text-align: center; min-height: 1.2rem; }
+    .login-msg.error { color: var(--expense); }
+    .login-msg.ok    { color: var(--income); }
+
+    /* ══ LOADING SPINNER ════════════════════════════════════════════════ */
+    #appLoader {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; z-index: 998;
+    }
+    .spinner {
+      width: 40px; height: 40px; border: 4px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ══ HEADER ═════════════════════════════════════════════════════════ */
     header {
-      background: var(--surface);
-      border-bottom: 3px solid var(--accent);
-      padding: 1rem 2rem;
-      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface); border-bottom: 3px solid var(--accent);
+      padding: .8rem 2rem; display: flex; align-items: center; justify-content: space-between;
       position: sticky; top: 0; z-index: 100;
       box-shadow: 0 2px 8px rgba(29,122,60,.1);
     }
     header h1 { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
     header h1 span { color: var(--text); }
+    .header-right { display: flex; align-items: center; gap: .8rem; }
     .nav-tabs { display: flex; gap: .5rem; }
     .tab-btn {
       padding: .45rem 1.1rem; border-radius: 8px; border: 1px solid var(--border);
       background: transparent; color: var(--muted); cursor: pointer; font-size: .88rem; font-weight: 500; transition: all .2s;
     }
     .tab-btn.active, .tab-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .user-chip {
+      display: flex; align-items: center; gap: .5rem;
+      background: var(--accent-light); border: 1px solid var(--border);
+      border-radius: 99px; padding: .3rem .8rem .3rem .5rem; font-size: .8rem;
+    }
+    .user-avatar {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .user-email { color: var(--text); font-weight: 500; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-logout {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: .35rem .7rem; font-size: .8rem; cursor: pointer; transition: all .2s;
+    }
+    .btn-logout:hover { border-color: var(--expense); color: var(--expense); }
 
-    /* ── Month selector ── */
+    /* ══ MONTH BAR ══════════════════════════════════════════════════════ */
     .month-bar {
       display: flex; align-items: center; gap: 1rem; padding: 1rem 2rem;
       background: var(--surface); border-bottom: 1px solid var(--border);
     }
-    .month-bar button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1rem; }
-    .month-bar button:hover { border-color: var(--accent); }
+    .month-bar button.nav-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+    .month-bar button.nav-btn:hover { border-color: var(--accent); }
     #monthLabel { font-size: 1.1rem; font-weight: 600; min-width: 160px; text-align: center; }
     .year-select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: .3rem .6rem; border-radius: 8px; font-size: .9rem; }
 
-    /* ── Layout ── */
+    /* ══ LAYOUT ══════════════════════════════════════════════════════════ */
     main { padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
     .page { display: none; }
     .page.active { display: block; }
 
-    /* ── Summary cards ── */
+    /* ══ CARDS ══════════════════════════════════════════════════════════ */
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-    .card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1.5rem;
-    }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1.5rem; }
     .card-label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
     .card-value { font-size: 1.5rem; font-weight: 700; }
-    .card-value.income { color: var(--income); }
+    .card-value.income  { color: var(--income); }
     .card-value.expense { color: var(--expense); }
-    .card-value.saving { color: var(--saving); }
-    .card-value.balance { color: var(--text); }
+    .card-value.saving  { color: var(--saving); }
 
-    /* ── Two-column grid ── */
+    /* ══ GRID / PANEL ═══════════════════════════════════════════════════ */
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
     @media(max-width:900px){ .grid2 { grid-template-columns: 1fr; } }
-
-    /* ── Panel ── */
     .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.3rem 1.5rem; }
     .panel-title { font-size: .95rem; font-weight: 600; color: var(--muted); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: .06em; }
-
-    /* ── Chart container ── */
     .chart-wrap { position: relative; height: 280px; }
 
-    /* ── Transaction list ── */
+    /* ══ TRANSACTIONS ════════════════════════════════════════════════════ */
     .tx-list { display: flex; flex-direction: column; gap: .5rem; max-height: 340px; overflow-y: auto; }
-    .tx-item {
-      display: flex; align-items: center; gap: .8rem;
-      background: var(--surface2); border-radius: 10px; padding: .7rem 1rem;
-    }
-    .tx-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .tx-item { display: flex; align-items: center; gap: .8rem; background: var(--surface2); border-radius: 10px; padding: .7rem 1rem; }
+    .tx-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .tx-info { flex: 1; }
     .tx-name { font-size: .92rem; font-weight: 500; }
-    .tx-cat { font-size: .75rem; color: var(--muted); }
-    .tx-amount { font-weight: 700; font-size: .95rem; }
+    .tx-cat  { font-size: .75rem; color: var(--muted); }
+    .tx-amount     { font-weight: 700; font-size: .95rem; }
     .tx-amount.ing { color: var(--income); }
     .tx-amount.gas { color: var(--expense); }
     .tx-del { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: .2rem .4rem; border-radius: 6px; }
     .tx-del:hover { color: var(--expense); background: rgba(192,57,43,.08); }
 
-    /* ── Form ── */
+    /* ══ FORM ════════════════════════════════════════════════════════════ */
     .form-row { display: flex; gap: .8rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .form-row input, .form-row select {
       background: var(--surface2); border: 1px solid var(--border); color: var(--text);
@@ -109,96 +163,71 @@
       padding: .55rem 1.4rem; font-size: .9rem; font-weight: 600; cursor: pointer; transition: opacity .2s;
     }
     .btn-add:hover { opacity: .85; }
+    .btn-add:disabled { opacity: .5; cursor: not-allowed; }
     .btn-secondary {
       background: var(--surface2); border: 1px solid var(--border); color: var(--text);
       border-radius: 10px; padding: .55rem 1.2rem; font-size: .9rem; cursor: pointer; transition: all .2s;
     }
     .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
-    /* ── Categories page ── */
+    /* ══ CATEGORIES ══════════════════════════════════════════════════════ */
     .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: .8rem; }
-    .cat-chip {
-      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
-      padding: .7rem 1rem; display: flex; align-items: center; gap: .7rem;
-    }
+    .cat-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: .7rem 1rem; display: flex; align-items: center; gap: .7rem; }
     .cat-icon { font-size: 1.3rem; }
     .cat-name { flex: 1; font-size: .88rem; font-weight: 500; }
-    .cat-del { background: transparent; border: none; color: var(--muted); cursor: pointer; }
+    .cat-del  { background: transparent; border: none; color: var(--muted); cursor: pointer; }
     .cat-del:hover { color: var(--expense); }
 
-    /* ── Annual page ── */
+    /* ══ ANNUAL ══════════════════════════════════════════════════════════ */
     .month-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 1rem; }
-    .month-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.2rem; cursor: pointer; transition: border-color .2s;
-    }
+    .month-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.2rem; cursor: pointer; transition: border-color .2s; }
     .month-card:hover { border-color: var(--accent); }
     .month-card h3 { font-size: .95rem; font-weight: 600; margin-bottom: .6rem; }
     .month-card .row { display: flex; justify-content: space-between; font-size: .82rem; margin-bottom: .2rem; }
     .month-card .row span:first-child { color: var(--muted); }
 
-    /* ── Life bar ── */
+    /* ══ LIFE BAR ════════════════════════════════════════════════════════ */
     .lifebar-panel {
       background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
       padding: 1.5rem 2rem; margin-bottom: 1.5rem;
       display: flex; align-items: center; gap: 2.5rem; flex-wrap: wrap;
     }
-    .lifebar-figure { position: relative; width: 120px; flex-shrink: 0; }
     .lifebar-figure svg { width: 120px; height: 220px; display: block; }
     .lifebar-info { flex: 1; min-width: 200px; }
     .lifebar-title { font-size: 1rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: .5rem; }
     .lifebar-status { font-size: 1.5rem; font-weight: 800; margin-bottom: .3rem; }
-    .lifebar-msg { font-size: .9rem; color: var(--muted); margin-bottom: 1.2rem; line-height: 1.4; }
-    .lifebar-track {
-      width: 100%; background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 99px; height: 18px; overflow: hidden; position: relative;
-    }
-    .lifebar-fill {
-      height: 100%; border-radius: 99px;
-      transition: width .8s cubic-bezier(.4,0,.2,1), background .5s;
-    }
-    .lifebar-pct { font-size: .8rem; color: var(--muted); margin-top: .4rem; text-align: right; }
+    .lifebar-msg    { font-size: .9rem; color: var(--muted); margin-bottom: 1.2rem; line-height: 1.4; }
+    .lifebar-track  { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 99px; height: 18px; overflow: hidden; }
+    .lifebar-fill   { height: 100%; border-radius: 99px; transition: width .8s cubic-bezier(.4,0,.2,1), background .5s; }
+    .lifebar-pct    { font-size: .8rem; color: var(--muted); margin-top: .4rem; text-align: right; }
     .lifebar-hearts { font-size: 1.3rem; letter-spacing: .1em; margin-bottom: .6rem; }
-
-    /* ── Mode toggle ── */
-    .lb-toggle {
-      display: inline-flex; background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 99px; padding: 3px; gap: 2px; margin-bottom: .9rem;
-    }
-    .lb-toggle button {
-      border: none; background: transparent; cursor: pointer;
-      padding: .28rem .85rem; border-radius: 99px; font-size: .78rem; font-weight: 600;
-      color: var(--muted); transition: all .18s;
-    }
+    .lb-toggle { display: inline-flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 99px; padding: 3px; gap: 2px; margin-bottom: .9rem; }
+    .lb-toggle button { border: none; background: transparent; cursor: pointer; padding: .28rem .85rem; border-radius: 99px; font-size: .78rem; font-weight: 600; color: var(--muted); transition: all .18s; }
     .lb-toggle button.active { background: var(--accent); color: #fff; }
-
-    /* ── Big pct display (mode: bar) ── */
-    .lb-bigpct {
-      font-size: 3.8rem; font-weight: 900; line-height: 1; margin-bottom: .2rem;
-      font-variant-numeric: tabular-nums; transition: color .4s;
-    }
+    .lb-bigpct { font-size: 3.8rem; font-weight: 900; line-height: 1; margin-bottom: .2rem; font-variant-numeric: tabular-nums; transition: color .4s; }
     .lb-sublabel { font-size: .78rem; color: var(--muted); margin-bottom: 1rem; }
-    .lifebar-track-big {
-      width: 100%; background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 6px; height: 28px; overflow: hidden; position: relative;
-    }
-    .lifebar-fill-big {
-      height: 100%; border-radius: 6px; position: relative;
-      transition: width .8s cubic-bezier(.4,0,.2,1), background .5s;
-      display: flex; align-items: center; justify-content: flex-end; padding-right: 8px;
-    }
+    .lifebar-track-big { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; height: 28px; overflow: hidden; }
+    .lifebar-fill-big  { height: 100%; border-radius: 6px; transition: width .8s cubic-bezier(.4,0,.2,1), background .5s; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; }
     .lifebar-fill-big span { font-size: .75rem; font-weight: 700; color: #fff; white-space: nowrap; }
     .lb-scale { display: flex; justify-content: space-between; margin-top: .3rem; font-size: .7rem; color: var(--muted); }
-
-    /* pulse when critical */
     @keyframes pulse-red { 0%,100%{ filter:drop-shadow(0 0 0px #c0392b); } 50%{ filter:drop-shadow(0 0 10px #c0392b88); } }
     .figure-critical { animation: pulse-red 1.2s infinite; }
 
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    /* ══ SYNC INDICATOR ══════════════════════════════════════════════════ */
+    .sync-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--income); margin-left: .5rem; vertical-align: middle;
+      transition: background .3s;
+    }
+    .sync-dot.syncing { background: #f9a825; animation: pulse-dot 1s infinite; }
+    .sync-dot.error   { background: var(--expense); }
+    @keyframes pulse-dot { 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
 
-    /* ── Responsive header ── */
+    /* ══ MISC ════════════════════════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
     @media(max-width:600px){
-      header { flex-direction: column; gap: .7rem; }
+      header { flex-wrap: wrap; gap: .6rem; padding: .8rem 1rem; }
+      .user-email { display: none; }
       .month-bar { flex-wrap: wrap; }
       main { padding: 1rem; }
     }
@@ -206,20 +235,56 @@
 </head>
 <body>
 
+<!-- ══ LOGIN ══════════════════════════════════════════════════════════════ -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <h2>💰 Control de Gastos</h2>
+    <p>Inicia sesión para acceder a tus datos desde cualquier dispositivo.</p>
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="setAuthTab('login')">Iniciar sesión</button>
+      <button class="login-tab" onclick="setAuthTab('register')">Registrarse</button>
+    </div>
+    <div class="login-field">
+      <label>Correo electrónico</label>
+      <input type="email" id="authEmail" placeholder="tu@correo.com" />
+    </div>
+    <div class="login-field">
+      <label>Contraseña</label>
+      <input type="password" id="authPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAuth()" />
+    </div>
+    <button class="btn-login" onclick="doAuth()">Entrar</button>
+    <div class="login-msg" id="loginMsg"></div>
+  </div>
+</div>
+
+<!-- ══ LOADER ══════════════════════════════════════════════════════════════ -->
+<div id="appLoader" style="display:none;">
+  <div class="spinner"></div>
+</div>
+
+<!-- ══ APP ════════════════════════════════════════════════════════════════ -->
+<div id="app" style="display:none;">
+
 <header>
-  <h1>💰 <span>Control de</span> Gastos</h1>
-  <nav class="nav-tabs">
-    <button class="tab-btn active" data-page="monthly">Mensual</button>
-    <button class="tab-btn" data-page="annual">Anual</button>
-    <button class="tab-btn" data-page="categories">Categorías</button>
-  </nav>
+  <h1>💰 <span>Control de</span> Gastos <span class="sync-dot" id="syncDot" title="Sincronizado"></span></h1>
+  <div class="header-right">
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-page="monthly">Mensual</button>
+      <button class="tab-btn" data-page="annual">Anual</button>
+      <button class="tab-btn" data-page="categories">Categorías</button>
+    </nav>
+    <div class="user-chip">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <span class="user-email" id="userEmail">—</span>
+    </div>
+    <button class="btn-logout" onclick="logout()">Salir</button>
+  </div>
 </header>
 
-<!-- Month bar (only for monthly view) -->
 <div class="month-bar" id="monthBar">
-  <button id="prevMonth">&#8592;</button>
+  <button class="nav-btn" id="prevMonth">&#8592;</button>
   <span id="monthLabel"></span>
-  <button id="nextMonth">&#8594;</button>
+  <button class="nav-btn" id="nextMonth">&#8594;</button>
   <select class="year-select" id="yearSelect"></select>
   <div style="margin-left:auto;display:flex;gap:.6rem;">
     <button class="btn-secondary" onclick="exportMonthExcel()">⬇ Mes Excel</button>
@@ -227,83 +292,57 @@
 </div>
 
 <main>
-  <!-- ── MONTHLY PAGE ── -->
+  <!-- ══ MENSUAL ══════════════════════════════════════════════════════════ -->
   <div class="page active" id="page-monthly">
     <div class="cards">
-      <div class="card"><div class="card-label">Ingresos</div><div class="card-value income" id="c-income">$0</div></div>
-      <div class="card"><div class="card-label">Gastos</div><div class="card-value expense" id="c-expense">$0</div></div>
-      <div class="card"><div class="card-label">Balance</div><div class="card-value balance" id="c-balance">$0</div></div>
-      <div class="card"><div class="card-label">Ahorro %</div><div class="card-value saving" id="c-saving">0%</div></div>
+      <div class="card"><div class="card-label">Ingresos</div><div class="card-value income"  id="c-income">$0</div></div>
+      <div class="card"><div class="card-label">Gastos</div>  <div class="card-value expense" id="c-expense">$0</div></div>
+      <div class="card"><div class="card-label">Balance</div> <div class="card-value"         id="c-balance">$0</div></div>
+      <div class="card"><div class="card-label">Ahorro %</div><div class="card-value saving"  id="c-saving">0%</div></div>
     </div>
 
-    <!-- Add transaction -->
     <div class="panel" style="margin-bottom:1.5rem;">
       <div class="panel-title">Agregar movimiento</div>
       <div class="form-row">
-        <select id="txType">
-          <option value="gasto">Gasto</option>
-          <option value="ingreso">Ingreso</option>
-        </select>
-        <input id="txName" type="text" placeholder="Descripción" />
+        <select id="txType"><option value="gasto">Gasto</option><option value="ingreso">Ingreso</option></select>
+        <input  id="txName"   type="text"   placeholder="Descripción" />
         <select id="txCat"></select>
-        <input id="txAmount" type="number" placeholder="Monto" min="0" />
-        <input id="txDate" type="date" />
-        <button class="btn-add" onclick="addTransaction()">+ Agregar</button>
+        <input  id="txAmount" type="number" placeholder="Monto" min="0" />
+        <input  id="txDate"   type="date" />
+        <button class="btn-add" id="btnAdd" onclick="addTransaction()">+ Agregar</button>
       </div>
     </div>
 
-    <!-- ── BARRA DE VIDA ── -->
+    <!-- BARRA DE VIDA -->
     <div class="lifebar-panel">
-      <!-- Figura humana SVG con fill animado -->
       <div class="lifebar-figure">
         <svg id="lifebarSvg" viewBox="0 0 120 220" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <!-- Clip que recorta la silueta humana -->
             <clipPath id="personClip">
-              <!-- Cabeza -->
               <circle cx="60" cy="30" r="22"/>
-              <!-- Cuerpo -->
               <rect x="34" y="52" width="52" height="70" rx="14"/>
-              <!-- Brazo izq -->
               <rect x="10" y="54" width="26" height="14" rx="7"/>
               <rect x="10" y="68" width="14" height="36" rx="7"/>
-              <!-- Brazo der -->
               <rect x="84" y="54" width="26" height="14" rx="7"/>
               <rect x="96" y="68" width="14" height="36" rx="7"/>
-              <!-- Pierna izq -->
               <rect x="36" y="118" width="22" height="60" rx="11"/>
               <rect x="30" y="170" width="28" height="16" rx="8"/>
-              <!-- Pierna der -->
               <rect x="62" y="118" width="22" height="60" rx="11"/>
               <rect x="62" y="170" width="28" height="16" rx="8"/>
             </clipPath>
-            <!-- Fill que sube/baja -->
             <clipPath id="fillClip">
               <rect id="fillRect" x="0" y="220" width="120" height="220"/>
             </clipPath>
           </defs>
-
-          <!-- Silueta de fondo (gris claro, el "vacío") -->
-          <g clip-path="url(#personClip)" opacity=".18">
-            <rect x="0" y="0" width="120" height="220" fill="#1a2e1a"/>
-          </g>
-
-          <!-- Fill de color (el "líquido") con onda -->
+          <g clip-path="url(#personClip)" opacity=".18"><rect x="0" y="0" width="120" height="220" fill="#1a2e1a"/></g>
           <g clip-path="url(#personClip)">
             <g clip-path="url(#fillClip)">
               <rect id="fillBg" x="0" y="0" width="120" height="220" fill="#1d7a3c"/>
-              <!-- Onda animada en la superficie -->
               <path id="wave" d="M-40,0 Q-10,-8 20,0 Q50,8 80,0 Q110,-8 140,0 L140,220 L-40,220 Z" fill="#1d7a3c" opacity=".6">
                 <animateTransform attributeName="transform" type="translate" from="0,0" to="80,0" dur="2.5s" repeatCount="indefinite"/>
               </path>
             </g>
           </g>
-
-          <!-- Silueta de contorno -->
-          <g clip-path="url(#personClip)">
-            <!-- Ojos (solo visibles cuando el fill está arriba de la cabeza) -->
-          </g>
-          <!-- Outline de la silueta -->
           <g fill="none" stroke="#1d7a3c" stroke-width="2.5" opacity=".5">
             <circle cx="60" cy="30" r="22"/>
             <rect x="34" y="52" width="52" height="70" rx="14"/>
@@ -316,18 +355,13 @@
             <rect x="62" y="118" width="22" height="60" rx="11"/>
             <rect x="62" y="170" width="28" height="16" rx="8"/>
           </g>
-
-          <!-- Ojos (siempre visibles encima) -->
           <circle cx="52" cy="28" r="3.5" fill="white" id="eyeL"/>
           <circle cx="68" cy="28" r="3.5" fill="white" id="eyeR"/>
-          <circle cx="53" cy="29" r="1.5" fill="#1a2e1a" id="pupilL"/>
-          <circle cx="69" cy="29" r="1.5" fill="#1a2e1a" id="pupilR"/>
-          <!-- Boca -->
+          <circle cx="53" cy="29" r="1.5" fill="#1a2e1a"/>
+          <circle cx="69" cy="29" r="1.5" fill="#1a2e1a"/>
           <path id="mouth" d="M53,38 Q60,44 67,38" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/>
         </svg>
       </div>
-
-      <!-- Info -->
       <div class="lifebar-info">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.2rem;">
           <div class="lifebar-title" style="margin-bottom:0;">❤️ Barra de vida</div>
@@ -336,22 +370,16 @@
             <button id="lbModeBar"    onclick="setLbMode('bar')">▬ Barra</button>
           </div>
         </div>
-
-        <!-- Modo corazones -->
         <div id="lbPanelHearts">
-          <div class="lifebar-hearts" id="lifeHearts">♥♥♥♥♥</div>
+          <div class="lifebar-hearts" id="lifeHearts">♡♡♡♡♡</div>
           <div class="lifebar-status" id="lifeStatus">Sin datos</div>
           <div class="lifebar-msg"   id="lifeMsg">Ingresa tus ingresos y gastos del mes para ver tu estado.</div>
-          <div class="lifebar-track">
-            <div class="lifebar-fill" id="lifebarFill" style="width:0%;background:#1d7a3c;"></div>
-          </div>
-          <div class="lifebar-pct" id="lifebarPct">0% disponible</div>
+          <div class="lifebar-track"><div class="lifebar-fill" id="lifebarFill" style="width:0%;background:#1d7a3c;"></div></div>
+          <div class="lifebar-pct"   id="lifebarPct">—</div>
         </div>
-
-        <!-- Modo barra -->
         <div id="lbPanelBar" style="display:none;">
-          <div class="lb-bigpct" id="lbBigPct">0<span style="font-size:2rem;">%</span></div>
-          <div class="lb-sublabel" id="lbSubLabel">disponible del ingreso mensual</div>
+          <div class="lb-bigpct"  id="lbBigPct">—</div>
+          <div class="lb-sublabel" id="lbSubLabel">sin datos este mes</div>
           <div class="lifebar-status" id="lifeStatusBar">Sin datos</div>
           <div class="lifebar-msg"   id="lifeMsgBar" style="margin-top:.3rem;">Ingresa tus ingresos y gastos del mes para ver tu estado.</div>
           <div class="lifebar-track-big" style="margin-top:1rem;">
@@ -365,16 +393,8 @@
     </div>
 
     <div class="grid2">
-      <!-- Chart -->
-      <div class="panel">
-        <div class="panel-title">Distribución de gastos</div>
-        <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
-      </div>
-      <!-- Bar chart -->
-      <div class="panel">
-        <div class="panel-title">Ingresos vs Gastos</div>
-        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
-      </div>
+      <div class="panel"><div class="panel-title">Distribución de gastos</div><div class="chart-wrap"><canvas id="pieChart"></canvas></div></div>
+      <div class="panel"><div class="panel-title">Ingresos vs Gastos (semanas)</div><div class="chart-wrap"><canvas id="barChart"></canvas></div></div>
     </div>
 
     <div style="margin-top:1.5rem;">
@@ -386,12 +406,10 @@
     </div>
   </div>
 
-  <!-- ── ANNUAL PAGE ── -->
+  <!-- ══ ANUAL ════════════════════════════════════════════════════════════ -->
   <div class="page" id="page-annual">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:.8rem;">
-      <div>
-        <select class="year-select" id="annualYear" style="font-size:1rem;padding:.4rem .8rem;"></select>
-      </div>
+      <select class="year-select" id="annualYear" style="font-size:1rem;padding:.4rem .8rem;"></select>
       <button class="btn-secondary" onclick="exportAnnualExcel()">⬇ Resumen Anual Excel</button>
     </div>
     <div class="cards" id="annualCards"></div>
@@ -402,13 +420,13 @@
     <div class="month-grid" id="monthGrid"></div>
   </div>
 
-  <!-- ── CATEGORIES PAGE ── -->
+  <!-- ══ CATEGORÍAS ══════════════════════════════════════════════════════ -->
   <div class="page" id="page-categories">
     <div class="panel" style="margin-bottom:1.2rem;">
       <div class="panel-title">Nueva categoría</div>
       <div class="form-row">
         <input id="catEmoji" type="text" placeholder="Emoji (ej: 🍔)" style="max-width:80px;" maxlength="2" />
-        <input id="catName" type="text" placeholder="Nombre de categoría" />
+        <input id="catName"  type="text" placeholder="Nombre de categoría" />
         <select id="catType">
           <option value="gasto">Gasto</option>
           <option value="ingreso">Ingreso</option>
@@ -421,76 +439,134 @@
   </div>
 </main>
 
-<script>
-// ── State ──────────────────────────────────────────────────────────────
-const STORAGE_KEY = 'cg_data_v1';
-let state = {
-  transactions: [],   // { id, type, name, cat, amount, date, year, month }
-  categories: [
-    { id:'c1', name:'Alimentación', emoji:'🍔', type:'gasto' },
-    { id:'c2', name:'Transporte',   emoji:'🚗', type:'gasto' },
-    { id:'c3', name:'Vivienda',     emoji:'🏠', type:'gasto' },
-    { id:'c4', name:'Salud',        emoji:'💊', type:'gasto' },
-    { id:'c5', name:'Entretención', emoji:'🎬', type:'gasto' },
-    { id:'c6', name:'Ropa',         emoji:'👗', type:'gasto' },
-    { id:'c7', name:'Educación',    emoji:'📚', type:'gasto' },
-    { id:'c8', name:'Sueldo',       emoji:'💼', type:'ingreso' },
-    { id:'c9', name:'Freelance',    emoji:'💻', type:'ingreso' },
-    { id:'c10', name:'Otros',       emoji:'📦', type:'ambos'  },
-  ]
-};
-let currentYear  = new Date().getFullYear();
-let currentMonth = new Date().getMonth(); // 0-indexed
-let activePage   = 'monthly';
-let lbMode       = 'hearts'; // 'hearts' | 'bar'
+</div><!-- #app -->
 
-// Charts
+<script>
+// ══ SUPABASE CLIENT ═══════════════════════════════════════════════════════
+const SUPA_URL = 'https://shhcumpyocyvkpeotkaq.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoaGN1bXB5b2N5dmtwZW90a2FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjM3MDUsImV4cCI6MjA5NTI5OTcwNX0.9d41ZLB1MVUNY0KrU4WFRTWhTfJQShThH4yntM3nzM8';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ══ AUTH STATE ════════════════════════════════════════════════════════════
+let currentUser = null;
+
+// ══ APP STATE ═════════════════════════════════════════════════════════════
+let state = { transactions: [], categories: [] };
+let currentYear  = new Date().getFullYear();
+let currentMonth = new Date().getMonth();
+let activePage   = 'monthly';
+let lbMode       = 'hearts';
+let _lastIncome  = 0, _lastExpense = 0;
 let pieChartInst = null, barChartInst = null, annualBarInst = null;
 
-// ── Persistence ────────────────────────────────────────────────────────
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function load() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) state = JSON.parse(raw);
-}
+const DEFAULT_CATS = [
+  { name:'Alimentación', emoji:'🍔', type:'gasto' },
+  { name:'Transporte',   emoji:'🚗', type:'gasto' },
+  { name:'Vivienda',     emoji:'🏠', type:'gasto' },
+  { name:'Salud',        emoji:'💊', type:'gasto' },
+  { name:'Entretención', emoji:'🎬', type:'gasto' },
+  { name:'Ropa',         emoji:'👗', type:'gasto' },
+  { name:'Educación',    emoji:'📚', type:'gasto' },
+  { name:'Sueldo',       emoji:'💼', type:'ingreso' },
+  { name:'Freelance',    emoji:'💻', type:'ingreso' },
+  { name:'Otros',        emoji:'📦', type:'ambos'  },
+];
 
-// ── Utils ──────────────────────────────────────────────────────────────
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const COLORS  = ['#1d7a3c','#4caf72','#a8d5b5','#2e8b57','#6abf8a','#155c2c','#81c784','#388e3c','#b2dfdb','#43a047','#c8e6c9','#66bb6a'];
 
-function fmt(n) {
-  return '$' + Math.abs(n).toLocaleString('es-CL');
+// ══ AUTH UI ═══════════════════════════════════════════════════════════════
+let authTab = 'login';
+function setAuthTab(t) {
+  authTab = t;
+  document.querySelectorAll('.login-tab').forEach((b,i) => b.classList.toggle('active', (i===0&&t==='login')||(i===1&&t==='register')));
+  document.getElementById('loginMsg').textContent = '';
 }
-function uid() { return '_' + Math.random().toString(36).slice(2,9); }
+async function doAuth() {
+  const email = document.getElementById('authEmail').value.trim();
+  const pass  = document.getElementById('authPass').value;
+  const msg   = document.getElementById('loginMsg');
+  if (!email || !pass) { msg.textContent='Completa email y contraseña.'; msg.className='login-msg error'; return; }
+  msg.textContent = authTab === 'login' ? 'Iniciando sesión...' : 'Creando cuenta...';
+  msg.className = 'login-msg';
 
-function monthTx(y, m) {
-  return state.transactions.filter(t => t.year === y && t.month === m);
+  let error;
+  if (authTab === 'login') {
+    ({ error } = await sb.auth.signInWithPassword({ email, password: pass }));
+  } else {
+    ({ error } = await sb.auth.signUp({ email, password: pass }));
+    if (!error) { msg.textContent = '✅ Cuenta creada. Revisa tu correo para confirmar.'; msg.className='login-msg ok'; return; }
+  }
+  if (error) { msg.textContent = error.message; msg.className='login-msg error'; }
 }
 
-function catById(id) { return state.categories.find(c => c.id === id); }
+async function logout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  state = { transactions: [], categories: [] };
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
 
-// ── Categories ─────────────────────────────────────────────────────────
-function addCategory() {
+// ══ SYNC DOT ══════════════════════════════════════════════════════════════
+function syncState(s) { // 'ok' | 'syncing' | 'error'
+  const d = document.getElementById('syncDot');
+  d.className = 'sync-dot' + (s !== 'ok' ? ' ' + s : '');
+  d.title = s === 'ok' ? 'Sincronizado ☁️' : s === 'syncing' ? 'Guardando...' : 'Error de sincronización';
+}
+
+// ══ UTILS ═════════════════════════════════════════════════════════════════
+function fmt(n) { return '$' + Math.abs(n).toLocaleString('es-CL'); }
+function uid()  { return crypto.randomUUID ? crypto.randomUUID() : '_' + Math.random().toString(36).slice(2,11); }
+function monthTx(y, m) { return state.transactions.filter(t => t.year === y && t.month === m); }
+function catById(id)   { return state.categories.find(c => c.id === id); }
+
+// ══ LOAD FROM SUPABASE ═══════════════════════════════════════════════════
+async function loadData() {
+  const uid = currentUser.id;
+  const [{ data: cats }, { data: txs }] = await Promise.all([
+    sb.from('cg_categories').select('*').eq('user_id', uid).order('created_at'),
+    sb.from('cg_transactions').select('*').eq('user_id', uid).order('created_at'),
+  ]);
+
+  // Primera vez: insertar categorías por defecto
+  if (cats && cats.length === 0) {
+    const defaults = DEFAULT_CATS.map(c => ({ ...c, id: uid(), user_id: uid }));
+    await sb.from('cg_categories').insert(defaults);
+    state.categories = defaults;
+  } else {
+    state.categories = cats || [];
+  }
+  state.transactions = txs || [];
+}
+
+// ══ CATEGORIES ════════════════════════════════════════════════════════════
+async function addCategory() {
   const emoji = document.getElementById('catEmoji').value.trim() || '📦';
   const name  = document.getElementById('catName').value.trim();
   const type  = document.getElementById('catType').value;
   if (!name) return;
-  state.categories.push({ id: uid(), name, emoji, type });
-  save(); renderCategories(); renderCatSelects();
+  syncState('syncing');
+  const cat = { id: uid(), user_id: currentUser.id, name, emoji, type };
+  const { error } = await sb.from('cg_categories').insert(cat);
+  if (error) { syncState('error'); alert('Error al guardar: ' + error.message); return; }
+  syncState('ok');
+  state.categories.push(cat);
+  renderCategories(); renderCatSelects();
   document.getElementById('catName').value = '';
   document.getElementById('catEmoji').value = '';
 }
-function deleteCategory(id) {
-  if (state.transactions.find(t => t.cat === id)) {
-    alert('No puedes eliminar una categoría con movimientos asociados.');
-    return;
-  }
+async function deleteCategory(id) {
+  if (state.transactions.find(t => t.cat === id)) { alert('No puedes eliminar una categoría con movimientos asociados.'); return; }
+  syncState('syncing');
+  const { error } = await sb.from('cg_categories').delete().eq('id', id);
+  if (error) { syncState('error'); return; }
+  syncState('ok');
   state.categories = state.categories.filter(c => c.id !== id);
-  save(); renderCategories(); renderCatSelects();
+  renderCategories(); renderCatSelects();
 }
 function renderCategories() {
-  const grid = document.getElementById('catGrid');
-  grid.innerHTML = state.categories.map(c => `
+  document.getElementById('catGrid').innerHTML = state.categories.map(c => `
     <div class="cat-chip">
       <span class="cat-icon">${c.emoji}</span>
       <span class="cat-name">${c.name}<br><small style="color:var(--muted)">${c.type}</small></span>
@@ -506,8 +582,8 @@ function renderCatSelects() {
   if (cats.find(c => c.id === prev)) sel.value = prev;
 }
 
-// ── Transactions ───────────────────────────────────────────────────────
-function addTransaction() {
+// ══ TRANSACTIONS ══════════════════════════════════════════════════════════
+async function addTransaction() {
   const name   = document.getElementById('txName').value.trim();
   const cat    = document.getElementById('txCat').value;
   const amount = parseFloat(document.getElementById('txAmount').value);
@@ -518,33 +594,45 @@ function addTransaction() {
   let y = currentYear, m = currentMonth;
   if (dateEl) { const d = new Date(dateEl + 'T00:00:00'); y = d.getFullYear(); m = d.getMonth(); }
 
-  state.transactions.push({ id: uid(), type, name, cat, amount, date: dateEl || '', year: y, month: m });
-  save(); renderMonthly();
+  const btn = document.getElementById('btnAdd');
+  btn.disabled = true; btn.textContent = '...';
+  syncState('syncing');
+
+  const tx = { id: uid(), user_id: currentUser.id, type, name, cat, amount, date: dateEl || '', year: y, month: m };
+  const { error } = await sb.from('cg_transactions').insert(tx);
+  btn.disabled = false; btn.textContent = '+ Agregar';
+
+  if (error) { syncState('error'); alert('Error al guardar: ' + error.message); return; }
+  syncState('ok');
+  state.transactions.push(tx);
+  renderMonthly();
   document.getElementById('txName').value = '';
   document.getElementById('txAmount').value = '';
 }
-function deleteTransaction(id) {
+
+async function deleteTransaction(id) {
+  syncState('syncing');
+  const { error } = await sb.from('cg_transactions').delete().eq('id', id);
+  if (error) { syncState('error'); return; }
+  syncState('ok');
   state.transactions = state.transactions.filter(t => t.id !== id);
-  save(); renderMonthly();
+  renderMonthly();
 }
 
-// ── Month navigation ───────────────────────────────────────────────────
+// ══ MONTH NAV ════════════════════════════════════════════════════════════
 function updateMonthBar() {
   document.getElementById('monthLabel').textContent = MONTHS[currentMonth] + ' ' + currentYear;
-  document.getElementById('yearSelect').value = currentYear;
-  document.getElementById('annualYear').value = currentYear;
+  document.getElementById('yearSelect').value  = currentYear;
+  document.getElementById('annualYear').value  = currentYear;
 }
 document.getElementById('prevMonth').onclick = () => {
-  if (currentMonth === 0) { currentMonth = 11; currentYear--; }
-  else currentMonth--;
+  if (currentMonth === 0) { currentMonth = 11; currentYear--; } else currentMonth--;
   updateMonthBar(); renderMonthly();
 };
 document.getElementById('nextMonth').onclick = () => {
-  if (currentMonth === 11) { currentMonth = 0; currentYear++; }
-  else currentMonth++;
+  if (currentMonth === 11) { currentMonth = 0; currentYear++; } else currentMonth++;
   updateMonthBar(); renderMonthly();
 };
-
 function buildYearSelects() {
   const y = new Date().getFullYear();
   const opts = Array.from({length:6},(_,i)=>`<option>${y-2+i}</option>`).join('');
@@ -556,323 +644,229 @@ function buildYearSelects() {
 document.getElementById('yearSelect').onchange = e => { currentYear = +e.target.value; updateMonthBar(); renderMonthly(); };
 document.getElementById('annualYear').onchange  = e => { currentYear = +e.target.value; updateMonthBar(); renderAnnual(); };
 
-// ── Monthly Render ─────────────────────────────────────────────────────
+// ══ MONTHLY RENDER ════════════════════════════════════════════════════════
 function renderMonthly() {
-  const txs      = monthTx(currentYear, currentMonth);
-  const income   = txs.filter(t => t.type === 'ingreso').reduce((a,t)=>a+t.amount,0);
-  const expense  = txs.filter(t => t.type === 'gasto').reduce((a,t)=>a+t.amount,0);
-  const balance  = income - expense;
-  const savingPct = income > 0 ? Math.round((balance/income)*100) : 0;
+  const txs     = monthTx(currentYear, currentMonth);
+  const income  = txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+  const expense = txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+  const balance = income - expense;
+  const savPct  = income > 0 ? Math.round((balance/income)*100) : 0;
 
   renderLifebar(income, expense);
   document.getElementById('c-income').textContent  = fmt(income);
   document.getElementById('c-expense').textContent = fmt(expense);
   document.getElementById('c-balance').textContent = (balance<0?'-':'') + fmt(balance);
   document.getElementById('c-balance').style.color = balance >= 0 ? 'var(--income)' : 'var(--expense)';
-  document.getElementById('c-saving').textContent  = savingPct + '%';
+  document.getElementById('c-saving').textContent  = savPct + '%';
 
-  // Pie chart by category (gastos only)
+  // Pie
   const catTotals = {};
-  txs.filter(t=>t.type==='gasto').forEach(t => {
-    catTotals[t.cat] = (catTotals[t.cat]||0) + t.amount;
-  });
-  const catLabels = Object.keys(catTotals).map(id => { const c = catById(id); return c ? c.emoji+' '+c.name : id; });
+  txs.filter(t=>t.type==='gasto').forEach(t => { catTotals[t.cat] = (catTotals[t.cat]||0)+t.amount; });
+  const catLabels = Object.keys(catTotals).map(id => { const c=catById(id); return c?c.emoji+' '+c.name:id; });
   const catData   = Object.values(catTotals);
-  const catColors = COLORS.slice(0, catLabels.length);
-
   if (pieChartInst) pieChartInst.destroy();
   pieChartInst = new Chart(document.getElementById('pieChart'), {
-    type: 'doughnut',
-    data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: catColors, borderWidth: 2, borderColor: 'var(--surface)' }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position:'right', labels:{ color:'#1a2e1a', font:{size:12}, boxWidth:14 } } }
-    }
+    type:'doughnut',
+    data:{ labels:catLabels, datasets:[{ data:catData, backgroundColor:COLORS.slice(0,catLabels.length), borderWidth:2, borderColor:'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ color:'#1a2e1a', font:{size:12}, boxWidth:14 } } } }
   });
 
-  // Bar chart income vs expense per week
-  const weeks = ['Sem 1','Sem 2','Sem 3','Sem 4'];
-  const wIncome = [0,0,0,0]; const wExpense = [0,0,0,0];
+  // Bar semanal
+  const wIncome=[0,0,0,0], wExpense=[0,0,0,0];
   txs.forEach(t => {
-    if (!t.date) { const w=0; if(t.type==='ingreso') wIncome[w]+=t.amount; else wExpense[w]+=t.amount; return; }
-    const day = new Date(t.date+'T00:00:00').getDate();
-    const w = Math.min(Math.floor((day-1)/7), 3);
+    const w = t.date ? Math.min(Math.floor((new Date(t.date+'T00:00:00').getDate()-1)/7),3) : 0;
     if (t.type==='ingreso') wIncome[w]+=t.amount; else wExpense[w]+=t.amount;
   });
-
   if (barChartInst) barChartInst.destroy();
   barChartInst = new Chart(document.getElementById('barChart'), {
     type:'bar',
-    data:{ labels:weeks, datasets:[
+    data:{ labels:['Sem 1','Sem 2','Sem 3','Sem 4'], datasets:[
       { label:'Ingresos', data:wIncome,  backgroundColor:'rgba(29,122,60,.75)' },
       { label:'Gastos',   data:wExpense, backgroundColor:'rgba(192,57,43,.7)' }
     ]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#1a2e1a' } } },
-      scales:{
-        x:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } },
-        y:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } }
-      }
-    }
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ labels:{ color:'#1a2e1a' } } }, scales:{ x:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } }, y:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } } } }
   });
 
-  // Transaction list
-  const list  = document.getElementById('txList');
-  const empty = document.getElementById('txEmpty');
+  // Lista
+  const list = document.getElementById('txList');
+  const empty= document.getElementById('txEmpty');
   if (txs.length === 0) { list.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display = 'none';
-  const sorted = [...txs].sort((a,b) => (b.date||'').localeCompare(a.date||''));
-  list.innerHTML = sorted.map((t,i) => {
+  empty.style.display='none';
+  list.innerHTML = [...txs].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t => {
     const c   = catById(t.cat);
     const col = COLORS[state.categories.findIndex(x=>x.id===t.cat) % COLORS.length] || '#888';
     return `<div class="tx-item">
       <div class="tx-dot" style="background:${col}"></div>
-      <div class="tx-info">
-        <div class="tx-name">${t.name}</div>
-        <div class="tx-cat">${c ? c.emoji+' '+c.name : ''} · ${t.date || 'Sin fecha'}</div>
-      </div>
+      <div class="tx-info"><div class="tx-name">${t.name}</div><div class="tx-cat">${c?c.emoji+' '+c.name:''} · ${t.date||'Sin fecha'}</div></div>
       <span class="tx-amount ${t.type==='ingreso'?'ing':'gas'}">${t.type==='ingreso'?'+':'-'}${fmt(t.amount)}</span>
       <button class="tx-del" onclick="deleteTransaction('${t.id}')">🗑</button>
     </div>`;
   }).join('');
 }
 
-// ── Life Bar ───────────────────────────────────────────────────────────
-let _lastIncome = 0, _lastExpense = 0;
-
+// ══ LIFE BAR ══════════════════════════════════════════════════════════════
 function setLbMode(mode) {
   lbMode = mode;
-  document.getElementById('lbModeHearts').classList.toggle('active', mode === 'hearts');
-  document.getElementById('lbModeBar').classList.toggle('active',    mode === 'bar');
-  document.getElementById('lbPanelHearts').style.display = mode === 'hearts' ? '' : 'none';
-  document.getElementById('lbPanelBar').style.display    = mode === 'bar'    ? '' : 'none';
+  document.getElementById('lbModeHearts').classList.toggle('active', mode==='hearts');
+  document.getElementById('lbModeBar').classList.toggle('active',    mode==='bar');
+  document.getElementById('lbPanelHearts').style.display = mode==='hearts' ? '' : 'none';
+  document.getElementById('lbPanelBar').style.display    = mode==='bar'    ? '' : 'none';
   renderLifebar(_lastIncome, _lastExpense);
 }
-
 function renderLifebar(income, expense) {
-  _lastIncome = income; _lastExpense = expense;
-  const pct    = income > 0 ? Math.max(0, Math.min(100, Math.round(((income - expense) / income) * 100))) : 0;
-  const noData = income === 0 && expense === 0;
+  _lastIncome=income; _lastExpense=expense;
+  const pct    = income>0 ? Math.max(0,Math.min(100,Math.round(((income-expense)/income)*100))) : 0;
+  const noData = income===0 && expense===0;
+  let color,status,msg,hearts,mouth;
+  if (noData)     { color='#aab8aa'; status='😶 Sin datos';    hearts='♡♡♡♡♡'; msg='Ingresa tus ingresos y gastos del mes para ver tu estado.'; mouth='M53,38 Q60,38 67,38'; }
+  else if(pct>=75){ color='#1d7a3c'; status='😄 ¡Excelente!'; hearts='♥♥♥♥♥'; msg='Estás ahorrando muy bien. ¡Tu billetera te lo agradece!'; mouth='M52,37 Q60,45 68,37'; }
+  else if(pct>=50){ color='#4caf50'; status='🙂 Bien';         hearts='♥♥♥♥♡'; msg='Vas bien, pero hay margen para ahorrar un poco más.'; mouth='M53,38 Q60,43 67,38'; }
+  else if(pct>=30){ color='#f9a825'; status='😐 Cuidado';      hearts='♥♥♥♡♡'; msg='Más de la mitad del ingreso gastado. Ojo con los gastos hormiga.'; mouth='M53,39 Q60,39 67,39'; }
+  else if(pct>=10){ color='#e65100'; status='😰 Peligro';      hearts='♥♥♡♡♡'; msg='¡Casi no queda! Frena los gastos ya.'; mouth='M53,41 Q60,37 67,41'; }
+  else if(pct>0)  { color='#c0392b'; status='😱 ¡Crítico!';   hearts='♥♡♡♡♡'; msg='Prácticamente en cero. Modo emergencia activado.'; mouth='M52,42 Q60,36 68,42'; }
+  else            { color='#7b1010'; status='💀 Game Over';    hearts='♡♡♡♡♡'; msg='Gastaste más de lo que ganaste este mes.'; mouth='M52,43 Q60,36 68,43'; }
 
-  // ── Estado según porcentaje ────────────────────────────────────────
-  let color, status, msg, hearts, mouthPath;
-  if (noData) {
-    color = '#aab8aa'; status = '😶 Sin datos'; hearts = '♡♡♡♡♡';
-    msg = 'Ingresa tus ingresos y gastos del mes para ver tu estado financiero.';
-    mouthPath = 'M53,38 Q60,38 67,38';
-  } else if (pct >= 75) {
-    color = '#1d7a3c'; status = '😄 ¡Excelente!'; hearts = '♥♥♥♥♥';
-    msg = 'Estás ahorrando muy bien. Sigue así y tu billetera te va a agradecer.';
-    mouthPath = 'M52,37 Q60,45 68,37';
-  } else if (pct >= 50) {
-    color = '#4caf50'; status = '🙂 Bien'; hearts = '♥♥♥♥♡';
-    msg = 'Vas bien, pero aún hay margen para ahorrar un poco más este mes.';
-    mouthPath = 'M53,38 Q60,43 67,38';
-  } else if (pct >= 30) {
-    color = '#f9a825'; status = '😐 Cuidado'; hearts = '♥♥♥♡♡';
-    msg = 'Ya llevas más de la mitad del ingreso gastado. Ojo con los gastos hormiga.';
-    mouthPath = 'M53,39 Q60,39 67,39';
-  } else if (pct >= 10) {
-    color = '#e65100'; status = '😰 Peligro'; hearts = '♥♥♡♡♡';
-    msg = '¡Cuidado! Casi no queda ingreso disponible. Frena los gastos ya.';
-    mouthPath = 'M53,41 Q60,37 67,41';
-  } else if (pct > 0) {
-    color = '#c0392b'; status = '😱 ¡Crítico!'; hearts = '♥♡♡♡♡';
-    msg = 'Prácticamente en cero. Modo ahorro de emergencia activado.';
-    mouthPath = 'M52,42 Q60,36 68,42';
-  } else {
-    color = '#7b1010'; status = '💀 Game Over'; hearts = '♡♡♡♡♡';
-    msg = 'Gastaste más de lo que ganaste. Tus gastos superan tus ingresos este mes.';
-    mouthPath = 'M52,43 Q60,36 68,43';
-  }
-
-  // ── Figura SVG ────────────────────────────────────────────────────
-  const fillY = 220 - (pct / 100) * 220;
+  const fillY = 220-(pct/100)*220;
   document.getElementById('fillRect').setAttribute('y', fillY);
   document.getElementById('fillBg').setAttribute('fill', color);
   document.querySelector('#wave').setAttribute('fill', color);
-  document.querySelectorAll('#lifebarSvg g[fill=none]').forEach(el => el.setAttribute('stroke', noData ? '#aab8aa' : color));
-  document.getElementById('eyeL').style.display = '';
-  document.getElementById('eyeR').style.display = pct <= 10 && !noData ? 'none' : '';
-  document.getElementById('mouth').setAttribute('d', mouthPath);
-  document.getElementById('lifebarSvg').className = (pct <= 10 && !noData) ? 'figure-critical' : '';
+  document.querySelectorAll('#lifebarSvg g[fill=none]').forEach(el => el.setAttribute('stroke', noData?'#aab8aa':color));
+  document.getElementById('eyeR').style.display = pct<=10&&!noData ? 'none' : '';
+  document.getElementById('mouth').setAttribute('d', mouth);
+  document.getElementById('lifebarSvg').className = (pct<=10&&!noData) ? 'figure-critical' : '';
 
-  // ── Modo corazones ────────────────────────────────────────────────
-  document.getElementById('lifeHearts').textContent = hearts;
-  document.getElementById('lifeHearts').style.color = color;
-  document.getElementById('lifeStatus').textContent = status;
-  document.getElementById('lifeStatus').style.color = color;
-  document.getElementById('lifeMsg').textContent    = msg;
-  document.getElementById('lifebarFill').style.width      = pct + '%';
-  document.getElementById('lifebarFill').style.background = color;
-  document.getElementById('lifebarPct').textContent = noData ? '—' : pct + '% disponible del ingreso';
+  // Corazones
+  document.getElementById('lifeHearts').textContent=hearts; document.getElementById('lifeHearts').style.color=color;
+  document.getElementById('lifeStatus').textContent=status; document.getElementById('lifeStatus').style.color=color;
+  document.getElementById('lifeMsg').textContent=msg;
+  document.getElementById('lifebarFill').style.width=pct+'%'; document.getElementById('lifebarFill').style.background=color;
+  document.getElementById('lifebarPct').textContent = noData?'—':pct+'% disponible del ingreso';
 
-  // ── Modo barra ────────────────────────────────────────────────────
-  const bigEl = document.getElementById('lbBigPct');
-  bigEl.style.color = color;
-  bigEl.innerHTML = noData ? `—` : `${pct}<span style="font-size:2rem;">%</span>`;
-  document.getElementById('lbSubLabel').textContent    = noData ? 'sin datos este mes' : 'disponible del ingreso mensual';
-  document.getElementById('lifeStatusBar').textContent = status;
-  document.getElementById('lifeStatusBar').style.color = color;
+  // Barra
+  const bigEl=document.getElementById('lbBigPct');
+  bigEl.style.color=color; bigEl.innerHTML=noData?'—':`${pct}<span style="font-size:2rem;">%</span>`;
+  document.getElementById('lbSubLabel').textContent    = noData?'sin datos este mes':'disponible del ingreso mensual';
+  document.getElementById('lifeStatusBar').textContent = status; document.getElementById('lifeStatusBar').style.color=color;
   document.getElementById('lifeMsgBar').textContent    = msg;
-  const fillBig = document.getElementById('lifebarFillBig');
-  fillBig.style.width      = pct + '%';
-  fillBig.style.background = color;
-  // Mostrar etiqueta interna solo si hay espacio
-  document.getElementById('lifebarFillLabel').textContent = pct >= 15 ? pct + '%' : '';
+  const fb=document.getElementById('lifebarFillBig');
+  fb.style.width=pct+'%'; fb.style.background=color;
+  document.getElementById('lifebarFillLabel').textContent = pct>=15?pct+'%':'';
 }
 
-// ── Annual Render ──────────────────────────────────────────────────────
+// ══ ANNUAL RENDER ═════════════════════════════════════════════════════════
 function renderAnnual() {
-  const y = currentYear;
-  let totalIncome=0, totalExpense=0;
-  const mIncome=[], mExpense=[];
-
-  for (let m=0;m<12;m++){
-    const txs   = monthTx(y, m);
-    const inc   = txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
-    const exp   = txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
-    mIncome.push(inc); mExpense.push(exp);
-    totalIncome+=inc; totalExpense+=exp;
+  const y=currentYear; let tInc=0,tExp=0; const mI=[],mE=[];
+  for(let m=0;m<12;m++){
+    const txs=monthTx(y,m);
+    const i=txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+    const e=txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+    mI.push(i); mE.push(e); tInc+=i; tExp+=e;
   }
-  const totalBalance = totalIncome - totalExpense;
-  const totalSaving  = totalIncome>0 ? Math.round((totalBalance/totalIncome)*100) : 0;
-
-  document.getElementById('annualCards').innerHTML = `
-    <div class="card"><div class="card-label">Ingresos anuales</div><div class="card-value income">${fmt(totalIncome)}</div></div>
-    <div class="card"><div class="card-label">Gastos anuales</div><div class="card-value expense">${fmt(totalExpense)}</div></div>
-    <div class="card"><div class="card-label">Balance anual</div><div class="card-value ${totalBalance>=0?'income':'expense'}">${totalBalance<0?'-':''}${fmt(totalBalance)}</div></div>
-    <div class="card"><div class="card-label">Tasa de ahorro</div><div class="card-value saving">${totalSaving}%</div></div>
-  `;
-
-  // Annual bar
-  if (annualBarInst) annualBarInst.destroy();
-  annualBarInst = new Chart(document.getElementById('annualBar'), {
-    type:'bar',
-    data:{
-      labels: MONTHS,
-      datasets:[
-        { label:'Ingresos', data:mIncome,  backgroundColor:'rgba(29,122,60,.75)' },
-        { label:'Gastos',   data:mExpense, backgroundColor:'rgba(192,57,43,.7)' }
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#1a2e1a' } } },
-      scales:{
-        x:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } },
-        y:{ ticks:{ color:'#6b8f6b' }, grid:{ color:'rgba(0,0,0,.06)' } }
-      }
-    }
+  const tBal=tInc-tExp, tSav=tInc>0?Math.round((tBal/tInc)*100):0;
+  document.getElementById('annualCards').innerHTML=`
+    <div class="card"><div class="card-label">Ingresos anuales</div><div class="card-value income">${fmt(tInc)}</div></div>
+    <div class="card"><div class="card-label">Gastos anuales</div><div class="card-value expense">${fmt(tExp)}</div></div>
+    <div class="card"><div class="card-label">Balance anual</div><div class="card-value ${tBal>=0?'income':'expense'}">${tBal<0?'-':''}${fmt(tBal)}</div></div>
+    <div class="card"><div class="card-label">Tasa de ahorro</div><div class="card-value saving">${tSav}%</div></div>`;
+  if(annualBarInst) annualBarInst.destroy();
+  annualBarInst=new Chart(document.getElementById('annualBar'),{
+    type:'bar', data:{ labels:MONTHS, datasets:[{ label:'Ingresos',data:mI,backgroundColor:'rgba(29,122,60,.75)' },{ label:'Gastos',data:mE,backgroundColor:'rgba(192,57,43,.7)' }] },
+    options:{ responsive:true,maintainAspectRatio:false, plugins:{legend:{labels:{color:'#1a2e1a'}}}, scales:{ x:{ticks:{color:'#6b8f6b'},grid:{color:'rgba(0,0,0,.06)'}},y:{ticks:{color:'#6b8f6b'},grid:{color:'rgba(0,0,0,.06)'}} } }
   });
-
-  // Month cards grid
-  const grid = document.getElementById('monthGrid');
-  grid.innerHTML = MONTHS.map((name,m) => {
-    const inc = mIncome[m], exp = mExpense[m], bal = inc-exp;
+  document.getElementById('monthGrid').innerHTML=MONTHS.map((name,m)=>{
+    const i=mI[m],e=mE[m],b=i-e;
     return `<div class="month-card" onclick="goToMonth(${y},${m})">
       <h3>${name} ${y}</h3>
-      <div class="row"><span>Ingresos</span><span style="color:var(--income)">${fmt(inc)}</span></div>
-      <div class="row"><span>Gastos</span><span style="color:var(--expense)">${fmt(exp)}</span></div>
-      <div class="row"><span>Balance</span><span style="color:${bal>=0?'var(--income)':'var(--expense)'}">${bal<0?'-':''}${fmt(bal)}</span></div>
+      <div class="row"><span>Ingresos</span><span style="color:var(--income)">${fmt(i)}</span></div>
+      <div class="row"><span>Gastos</span><span style="color:var(--expense)">${fmt(e)}</span></div>
+      <div class="row"><span>Balance</span><span style="color:${b>=0?'var(--income)':'var(--expense)'}">${b<0?'-':''}${fmt(b)}</span></div>
     </div>`;
   }).join('');
 }
-function goToMonth(y, m) {
-  currentYear=y; currentMonth=m;
-  updateMonthBar(); switchPage('monthly');
-}
+function goToMonth(y,m){ currentYear=y; currentMonth=m; updateMonthBar(); switchPage('monthly'); }
 
-// ── Page switching ─────────────────────────────────────────────────────
+// ══ PAGE SWITCH ═══════════════════════════════════════════════════════════
 function switchPage(name) {
-  activePage = name;
-  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-'+name));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.page === name));
-  document.getElementById('monthBar').style.display = name === 'monthly' ? 'flex' : 'none';
-  if (name === 'monthly') renderMonthly();
-  if (name === 'annual')  renderAnnual();
-  if (name === 'categories') renderCategories();
+  activePage=name;
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id==='page-'+name));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===name));
+  document.getElementById('monthBar').style.display = name==='monthly'?'flex':'none';
+  if(name==='monthly')    renderMonthly();
+  if(name==='annual')     renderAnnual();
+  if(name==='categories') renderCategories();
 }
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.onclick = () => switchPage(btn.dataset.page);
-});
+document.querySelectorAll('.tab-btn').forEach(btn=>{ btn.onclick=()=>switchPage(btn.dataset.page); });
 
-// ── Excel export ───────────────────────────────────────────────────────
+// ══ EXCEL EXPORT ═════════════════════════════════════════════════════════
 function exportMonthExcel() {
-  const txs = monthTx(currentYear, currentMonth);
-  const rows = [['Fecha','Tipo','Descripción','Categoría','Monto']];
-  txs.forEach(t => {
-    const c = catById(t.cat);
-    rows.push([t.date || '-', t.type, t.name, c ? c.name : '-', t.type==='ingreso'?t.amount:-t.amount]);
-  });
-  // Summary at bottom
-  const income  = txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
-  const expense = txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
-  rows.push([]);
-  rows.push(['','','','Total Ingresos', income]);
-  rows.push(['','','','Total Gastos',   expense]);
-  rows.push(['','','','Balance',        income-expense]);
-
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, MONTHS[currentMonth]);
-  XLSX.writeFile(wb, `gastos_${MONTHS[currentMonth]}_${currentYear}.xlsx`);
+  const txs=monthTx(currentYear,currentMonth);
+  const rows=[['Fecha','Tipo','Descripción','Categoría','Monto']];
+  txs.forEach(t=>{ const c=catById(t.cat); rows.push([t.date||'-',t.type,t.name,c?c.name:'-',t.type==='ingreso'?t.amount:-t.amount]); });
+  const inc=txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+  const exp=txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+  rows.push([]); rows.push(['','','','Total Ingresos',inc]); rows.push(['','','','Total Gastos',exp]); rows.push(['','','','Balance',inc-exp]);
+  const ws=XLSX.utils.aoa_to_sheet(rows); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,MONTHS[currentMonth]);
+  XLSX.writeFile(wb,`gastos_${MONTHS[currentMonth]}_${currentYear}.xlsx`);
 }
-
 function exportAnnualExcel() {
-  const y = currentYear;
-  const wb = XLSX.utils.book_new();
-
-  // One sheet per month with data + summary sheet
-  const summaryRows = [['Mes','Ingresos','Gastos','Balance','Ahorro %']];
-  for (let m=0;m<12;m++){
-    const txs    = monthTx(y,m);
-    const inc    = txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
-    const exp    = txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
-    const bal    = inc-exp;
-    const savPct = inc>0?Math.round((bal/inc)*100):0;
-    summaryRows.push([MONTHS[m], inc, exp, bal, savPct+'%']);
-
-    if (txs.length > 0) {
-      const rows = [['Fecha','Tipo','Descripción','Categoría','Monto']];
-      txs.forEach(t => {
-        const c = catById(t.cat);
-        rows.push([t.date||'-', t.type, t.name, c?c.name:'-', t.type==='ingreso'?t.amount:-t.amount]);
-      });
-      rows.push([]); rows.push(['','','','Ingresos',inc]); rows.push(['','','','Gastos',exp]); rows.push(['','','','Balance',bal]);
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws, MONTHS[m].slice(0,3));
+  const y=currentYear; const wb=XLSX.utils.book_new();
+  const sumRows=[['Mes','Ingresos','Gastos','Balance','Ahorro %']];
+  for(let m=0;m<12;m++){
+    const txs=monthTx(y,m);
+    const i=txs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+    const e=txs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+    sumRows.push([MONTHS[m],i,e,i-e,i>0?Math.round(((i-e)/i)*100)+'%':'0%']);
+    if(txs.length>0){
+      const rows=[['Fecha','Tipo','Descripción','Categoría','Monto']];
+      txs.forEach(t=>{ const c=catById(t.cat); rows.push([t.date||'-',t.type,t.name,c?c.name:'-',t.type==='ingreso'?t.amount:-t.amount]); });
+      rows.push([]); rows.push(['','','','Ingresos',i]); rows.push(['','','','Gastos',e]); rows.push(['','','','Balance',i-e]);
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),MONTHS[m].slice(0,3));
     }
   }
-  // Summary totals
-  const allTxs = state.transactions.filter(t=>t.year===y);
-  const tInc = allTxs.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
-  const tExp = allTxs.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
-  summaryRows.push([]); summaryRows.push(['TOTAL',tInc,tExp,tInc-tExp,tInc>0?Math.round(((tInc-tExp)/tInc)*100)+'%':'0%']);
-  const ws0 = XLSX.utils.aoa_to_sheet(summaryRows);
-  XLSX.utils.book_append_sheet(wb, ws0, 'Resumen');
-  XLSX.writeFile(wb, `resumen_gastos_${y}.xlsx`);
+  const all=state.transactions.filter(t=>t.year===y);
+  const ti=all.filter(t=>t.type==='ingreso').reduce((a,t)=>a+t.amount,0);
+  const te=all.filter(t=>t.type==='gasto').reduce((a,t)=>a+t.amount,0);
+  sumRows.push([]); sumRows.push(['TOTAL',ti,te,ti-te,ti>0?Math.round(((ti-te)/ti)*100)+'%':'0%']);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sumRows),'Resumen');
+  XLSX.writeFile(wb,`resumen_gastos_${y}.xlsx`);
 }
 
-// ── Init ───────────────────────────────────────────────────────────────
-function init() {
-  load();
+// ══ INIT ══════════════════════════════════════════════════════════════════
+async function startApp(user) {
+  currentUser = user;
+
+  // Header usuario
+  const email = user.email || '';
+  document.getElementById('userEmail').textContent  = email;
+  document.getElementById('userAvatar').textContent = email[0].toUpperCase();
+
+  // Mostrar loader, cargar datos
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('appLoader').style.display    = 'flex';
+  await loadData();
+  document.getElementById('appLoader').style.display = 'none';
+  document.getElementById('app').style.display       = 'block';
+
   buildYearSelects();
   updateMonthBar();
-
-  // Default date to today
-  const today = new Date();
-  document.getElementById('txDate').value = today.toISOString().split('T')[0];
-
-  // Category selects
+  document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
   renderCatSelects();
   document.getElementById('txType').onchange = renderCatSelects;
-
   renderMonthly();
+  syncState('ok');
 }
 
-init();
+// Escuchar cambios de sesión
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    await startApp(session.user);
+  } else {
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('appLoader').style.display = 'none';
+    document.getElementById('loginOverlay').style.display = 'flex';
+  }
+});
 </script>
 </body>
 </html>
